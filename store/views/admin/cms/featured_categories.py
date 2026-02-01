@@ -8,8 +8,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.category import Category
 from store.models.landing import FeaturedCategory
+
+
+# ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
 
 
 # ==================================================
@@ -42,7 +52,7 @@ def parse_bool(value):
 # ==================================================
 # ADMIN FEATURED CATEGORY — LIST & CREATE
 # ==================================================
-class AdminFeaturedCategoryListCreateView(APIView):
+class AdminFeaturedCategoryListCreateView(AdminJWTAPIView):
     """
     Admin CMS API for Featured Categories.
 
@@ -52,8 +62,6 @@ class AdminFeaturedCategoryListCreateView(APIView):
     - Ordering is deterministic
     - Backend is the FINAL authority
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # GET — LIST FEATURED CATEGORIES
@@ -163,13 +171,11 @@ class AdminFeaturedCategoryListCreateView(APIView):
 # ==================================================
 # ADMIN FEATURED CATEGORY — DETAIL
 # ==================================================
-class AdminFeaturedCategoryDetailView(APIView):
+class AdminFeaturedCategoryDetailView(AdminJWTAPIView):
     """
     Admin CMS API for updating / deleting
     a single Featured Category.
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # PATCH — UPDATE FEATURED CATEGORY
