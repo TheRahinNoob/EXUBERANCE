@@ -1,11 +1,6 @@
 from django.urls import path
 
 # ==================================================
-# CSRF (ADMIN BOOTSTRAP) 🔐
-# ==================================================
-from store.views.csrf import get_csrf_token
-
-# ==================================================
 # ORDERS
 # ==================================================
 from store.views.admin.orders import (
@@ -106,7 +101,7 @@ from store.views.admin.cms.comfort_rails import (
 )
 
 # ==================================================
-# CMS — COMFORT EDITORIAL 🔥
+# CMS — COMFORT EDITORIAL
 # ==================================================
 from store.views.admin.cms.comfort_editorial import (
     AdminComfortEditorialBlockListCreateView,
@@ -120,14 +115,9 @@ from store.views.admin.cms.comfort_editorial import (
 app_name = "admin_api"
 
 # ==================================================
-# URLPATTERNS — ADMIN API ONLY
+# URLPATTERNS — JWT-PROTECTED ADMIN API
 # ==================================================
 urlpatterns = [
-
-    # ==================================================
-    # CSRF — MUST BE FIRST 🔐
-    # ==================================================
-    path("csrf/", get_csrf_token, name="admin-csrf"),
 
     # ---------------- ORDERS ----------------
     path("orders/", AdminOrderListView.as_view()),
