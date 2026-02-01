@@ -25,10 +25,20 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.landing_block import LandingBlock
 from store.models.landing import HotCategoryBlock
 from store.models.landing_comfort import ComfortCategoryRail
 from store.models.landing_comfort_editorial import ComfortEditorialBlock
+
+
+# ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
 
 
 # ==================================================
@@ -131,8 +141,7 @@ def _apply_block_type_rules(
 # LIST + CREATE
 # ==================================================
 
-class AdminLandingBlockListCreateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminLandingBlockListCreateView(AdminJWTAPIView):
 
     def get(self, request):
         blocks = (
@@ -209,8 +218,7 @@ class AdminLandingBlockListCreateView(APIView):
 # DETAIL — UPDATE / DELETE
 # ==================================================
 
-class AdminLandingBlockDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminLandingBlockDetailView(AdminJWTAPIView):
 
     @transaction.atomic
     def patch(self, request, pk: int):
@@ -270,14 +278,12 @@ class AdminLandingBlockDetailView(APIView):
 # 🔥 REORDER — DRAG & DROP (ATOMIC)
 # ==================================================
 
-class AdminLandingBlockReorderView(APIView):
+class AdminLandingBlockReorderView(AdminJWTAPIView):
     """
     POST:
     - Accepts list of {id, ordering}
     - Atomic reorder
     """
-
-    permission_classes = [IsAdminUser]
 
     @transaction.atomic
     def post(self, request):
