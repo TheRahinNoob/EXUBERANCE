@@ -51,6 +51,8 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+
+    # 🔒 CSRF MUST be here
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -78,13 +80,16 @@ CORS_ALLOWED_ORIGINS = [
 
 
 # ==================================================
-# CSRF
+# CSRF (CRITICAL FIXES)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
     "https://*.onrender.com",
 ]
+
+# 🔥 VERY IMPORTANT
+CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"
 
 
 # ==================================================
@@ -174,7 +179,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF
+# DRF (SESSION + CSRF SAFE)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
