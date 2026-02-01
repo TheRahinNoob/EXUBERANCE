@@ -99,8 +99,8 @@ CSRF_TRUSTED_ORIGINS = [
 # ==================================================
 # SESSION & CSRF COOKIES (CROSS-SITE SAFE)
 # ==================================================
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
