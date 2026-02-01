@@ -7,6 +7,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.landing import (
     HotCategory,
     HotCategoryBlock,
@@ -15,11 +17,18 @@ from store.models.landing import (
 
 
 # ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
 # HOT CATEGORY BLOCK — LIST + CREATE
 # ==================================================
 
-class AdminHotCategoryBlockListCreateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminHotCategoryBlockListCreateView(AdminJWTAPIView):
 
     def get(self, request):
         blocks = (
@@ -99,8 +108,7 @@ class AdminHotCategoryBlockListCreateView(APIView):
 # HOT CATEGORY BLOCK — DETAIL / UPDATE / DELETE
 # ==================================================
 
-class AdminHotCategoryBlockDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminHotCategoryBlockDetailView(AdminJWTAPIView):
 
     def get(self, request, pk):
         block = get_object_or_404(
@@ -201,8 +209,7 @@ class AdminHotCategoryBlockDetailView(APIView):
 # HOT CATEGORY BLOCK ITEM — CREATE
 # ==================================================
 
-class AdminHotCategoryBlockItemCreateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminHotCategoryBlockItemCreateView(AdminJWTAPIView):
 
     @transaction.atomic
     def post(self, request, pk):
@@ -270,11 +277,10 @@ class AdminHotCategoryBlockItemCreateView(APIView):
 
 
 # ==================================================
-# HOT CATEGORY BLOCK ITEM — DELETE  🔥🔥🔥
+# HOT CATEGORY BLOCK ITEM — DELETE 🔥🔥🔥
 # ==================================================
 
-class AdminHotCategoryBlockItemDeleteView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminHotCategoryBlockItemDeleteView(AdminJWTAPIView):
 
     @transaction.atomic
     def delete(self, request, pk, item_id):
@@ -293,8 +299,7 @@ class AdminHotCategoryBlockItemDeleteView(APIView):
 # HOT CATEGORY BLOCK ITEM — REORDER / TOGGLE
 # ==================================================
 
-class AdminHotCategoryBlockItemReorderView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminHotCategoryBlockItemReorderView(AdminJWTAPIView):
 
     @transaction.atomic
     def post(self, request, pk):
