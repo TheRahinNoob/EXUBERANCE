@@ -10,15 +10,39 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.parsers import JSONParser
 from rest_framework import status
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Product
 from store.services.product_service import update_product_description
 
 
-class AdminProductDescriptionUpdateView(APIView):
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin product mutation views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
+# ADMIN PRODUCT DESCRIPTION UPDATE
+# ==================================================
+# PATCH /api/admin/products/<pk>/description/
+# ==================================================
+
+class AdminProductDescriptionUpdateView(AdminJWTAPIView):
     """
     Admin-only endpoint for updating product description (HTML).
-
-    PATCH /api/admin/products/<pk>/description/
 
     Contract:
     - Accepts JSON body: { "description": "<html>" }
@@ -27,7 +51,6 @@ class AdminProductDescriptionUpdateView(APIView):
     - HTML sanitization happens in service layer
     """
 
-    permission_classes = [IsAdminUser]
     parser_classes = [JSONParser]
 
     def patch(self, request, pk: int):
