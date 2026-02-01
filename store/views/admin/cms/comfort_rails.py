@@ -7,8 +7,28 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Category, Product
 from store.models.landing_comfort import ComfortCategoryRail
+
+
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin CMS views.
+
+    Enforces:
+    - JWT authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
 
 
 # ==================================================
@@ -40,8 +60,7 @@ def safe_delete_image(image_field):
 # COMFORT RAIL — LIST + CREATE
 # ==================================================
 
-class AdminComfortCategoryRailListCreateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminComfortCategoryRailListCreateView(AdminJWTAPIView):
 
     def get(self, request):
         rails = (
@@ -51,31 +70,34 @@ class AdminComfortCategoryRailListCreateView(APIView):
             .order_by("ordering", "id")
         )
 
-        return Response([
-            {
-                "id": rail.id,
-                "category": {
-                    "id": rail.category.id,
-                    "name": rail.category.name,
-                    "slug": rail.category.slug,
-                },
-                "image": build_absolute_image_url(request, rail.image),
-                "auto_fill": rail.auto_fill,
-                "auto_limit": rail.auto_limit,
-                "is_active": rail.is_active,
-                "ordering": rail.ordering,
-                "products": [
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "slug": p.slug,
-                    }
-                    for p in rail.products.all()
-                ],
-                "created_at": rail.created_at,
-            }
-            for rail in rails
-        ])
+        return Response(
+            [
+                {
+                    "id": rail.id,
+                    "category": {
+                        "id": rail.category.id,
+                        "name": rail.category.name,
+                        "slug": rail.category.slug,
+                    },
+                    "image": build_absolute_image_url(request, rail.image),
+                    "auto_fill": rail.auto_fill,
+                    "auto_limit": rail.auto_limit,
+                    "is_active": rail.is_active,
+                    "ordering": rail.ordering,
+                    "products": [
+                        {
+                            "id": p.id,
+                            "name": p.name,
+                            "slug": p.slug,
+                        }
+                        for p in rail.products.all()
+                    ],
+                    "created_at": rail.created_at,
+                }
+                for rail in rails
+            ],
+            status=status.HTTP_200_OK,
+        )
 
     @transaction.atomic
     def post(self, request):
@@ -135,8 +157,7 @@ class AdminComfortCategoryRailListCreateView(APIView):
 # COMFORT RAIL — DETAIL / METADATA UPDATE / DELETE
 # ==================================================
 
-class AdminComfortCategoryRailDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminComfortCategoryRailDetailView(AdminJWTAPIView):
 
     def get(self, request, pk):
         rail = get_object_or_404(
@@ -146,28 +167,31 @@ class AdminComfortCategoryRailDetailView(APIView):
             pk=pk,
         )
 
-        return Response({
-            "id": rail.id,
-            "category": {
-                "id": rail.category.id,
-                "name": rail.category.name,
-                "slug": rail.category.slug,
+        return Response(
+            {
+                "id": rail.id,
+                "category": {
+                    "id": rail.category.id,
+                    "name": rail.category.name,
+                    "slug": rail.category.slug,
+                },
+                "image": build_absolute_image_url(request, rail.image),
+                "auto_fill": rail.auto_fill,
+                "auto_limit": rail.auto_limit,
+                "is_active": rail.is_active,
+                "ordering": rail.ordering,
+                "products": [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "slug": p.slug,
+                    }
+                    for p in rail.products.all()
+                ],
+                "created_at": rail.created_at,
             },
-            "image": build_absolute_image_url(request, rail.image),
-            "auto_fill": rail.auto_fill,
-            "auto_limit": rail.auto_limit,
-            "is_active": rail.is_active,
-            "ordering": rail.ordering,
-            "products": [
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "slug": p.slug,
-                }
-                for p in rail.products.all()
-            ],
-            "created_at": rail.created_at,
-        })
+            status=status.HTTP_200_OK,
+        )
 
     @transaction.atomic
     def patch(self, request, pk):
@@ -208,7 +232,10 @@ class AdminComfortCategoryRailDetailView(APIView):
         rail.full_clean()
         rail.save()
 
-        return Response({"detail": "Updated successfully"})
+        return Response(
+            {"detail": "Updated successfully"},
+            status=status.HTTP_200_OK,
+        )
 
     @transaction.atomic
     def delete(self, request, pk):
@@ -227,8 +254,7 @@ class AdminComfortCategoryRailDetailView(APIView):
 # COMFORT RAIL — IMAGE PATCH (DEDICATED)
 # ==================================================
 
-class AdminComfortCategoryRailImageUpdateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminComfortCategoryRailImageUpdateView(AdminJWTAPIView):
 
     @transaction.atomic
     def patch(self, request, pk):
@@ -267,8 +293,7 @@ class AdminComfortCategoryRailImageUpdateView(APIView):
 # COMFORT RAIL — PRODUCT ATTACH / DETACH
 # ==================================================
 
-class AdminComfortCategoryRailProductView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminComfortCategoryRailProductView(AdminJWTAPIView):
 
     @transaction.atomic
     def post(self, request, pk):
@@ -305,8 +330,7 @@ class AdminComfortCategoryRailProductView(APIView):
 # COMFORT RAIL — REORDER
 # ==================================================
 
-class AdminComfortCategoryRailReorderView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminComfortCategoryRailReorderView(AdminJWTAPIView):
 
     @transaction.atomic
     def post(self, request):
@@ -352,4 +376,7 @@ class AdminComfortCategoryRailReorderView(APIView):
             rail.full_clean()
             rail.save(update_fields=["ordering"])
 
-        return Response({"detail": "Reordered successfully"})
+        return Response(
+            {"detail": "Reordered successfully"},
+            status=status.HTTP_200_OK,
+        )
