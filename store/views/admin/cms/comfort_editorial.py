@@ -6,15 +6,36 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.landing_comfort_editorial import (
     ComfortEditorialBlock,
 )
 
 
 # ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin CMS views.
+
+    Enforces:
+    - JWT authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
 # 🧠 ADMIN — COMFORT EDITORIAL (LIST + CREATE)
 # ==================================================
-class AdminComfortEditorialBlockListCreateView(APIView):
+
+class AdminComfortEditorialBlockListCreateView(AdminJWTAPIView):
     """
     Admin CMS endpoint for Comfort Editorial blocks.
 
@@ -28,8 +49,6 @@ class AdminComfortEditorialBlockListCreateView(APIView):
     - RAW ARRAY response (NO { items })
     """
 
-    permission_classes = [IsAdminUser]
-
     def get(self, request):
         blocks = (
             ComfortEditorialBlock.objects
@@ -37,30 +56,32 @@ class AdminComfortEditorialBlockListCreateView(APIView):
             .order_by("ordering", "id")
         )
 
-        # 🔥 ADMIN APIs MUST RETURN RAW ARRAYS
-        return Response([
-            {
-                "id": block.id,
-                "title": block.title,
-                "subtitle": block.subtitle,
-                "image": (
-                    request.build_absolute_uri(block.image.url)
-                    if block.image
-                    else None
-                ),
-                "cta_text": block.cta_text,
-                "cta_url": block.cta_url,
-                "ordering": block.ordering,
-                "is_active": block.is_active,
-                "created_at": block.created_at.isoformat(),
-            }
-            for block in blocks
-        ])
+        return Response(
+            [
+                {
+                    "id": block.id,
+                    "title": block.title,
+                    "subtitle": block.subtitle,
+                    "image": (
+                        request.build_absolute_uri(block.image.url)
+                        if block.image
+                        else None
+                    ),
+                    "cta_text": block.cta_text,
+                    "cta_url": block.cta_url,
+                    "ordering": block.ordering,
+                    "is_active": block.is_active,
+                    "created_at": block.created_at.isoformat(),
+                }
+                for block in blocks
+            ],
+            status=status.HTTP_200_OK,
+        )
 
     def post(self, request):
-        data = request.data
+        data = request.data or {}
 
-        title = data.get("title", "").strip()
+        title = (data.get("title") or "").strip()
         if not title:
             return Response(
                 {"error": "Title is required"},
@@ -89,46 +110,48 @@ class AdminComfortEditorialBlockListCreateView(APIView):
 # ==================================================
 # 🧠 ADMIN — COMFORT EDITORIAL (DETAIL)
 # ==================================================
-class AdminComfortEditorialBlockDetailView(APIView):
+
+class AdminComfortEditorialBlockDetailView(AdminJWTAPIView):
     """
     Retrieve / Update / Delete a Comfort Editorial block.
     """
 
-    permission_classes = [IsAdminUser]
-
-    def get_object(self, pk):
+    def get_object(self, pk: int):
         return get_object_or_404(
             ComfortEditorialBlock,
             pk=pk,
         )
 
-    def get(self, request, pk):
+    def get(self, request, pk: int):
         block = self.get_object(pk)
 
-        return Response({
-            "id": block.id,
-            "title": block.title,
-            "subtitle": block.subtitle,
-            "image": (
-                request.build_absolute_uri(block.image.url)
-                if block.image
-                else None
-            ),
-            "cta_text": block.cta_text,
-            "cta_url": block.cta_url,
-            "ordering": block.ordering,
-            "is_active": block.is_active,
-            "created_at": block.created_at.isoformat(),
-        })
+        return Response(
+            {
+                "id": block.id,
+                "title": block.title,
+                "subtitle": block.subtitle,
+                "image": (
+                    request.build_absolute_uri(block.image.url)
+                    if block.image
+                    else None
+                ),
+                "cta_text": block.cta_text,
+                "cta_url": block.cta_url,
+                "ordering": block.ordering,
+                "is_active": block.is_active,
+                "created_at": block.created_at.isoformat(),
+            },
+            status=status.HTTP_200_OK,
+        )
 
-    def patch(self, request, pk):
+    def patch(self, request, pk: int):
         block = self.get_object(pk)
-        data = request.data
+        data = request.data or {}
 
         fields_updated = []
 
         if "title" in data:
-            block.title = data.get("title", "").strip()
+            block.title = (data.get("title") or "").strip()
             fields_updated.append("title")
 
         if "subtitle" in data:
@@ -155,10 +178,11 @@ class AdminComfortEditorialBlockDetailView(APIView):
             block.save(update_fields=fields_updated)
 
         return Response(
-            {"message": "Comfort editorial block updated"}
+            {"message": "Comfort editorial block updated"},
+            status=status.HTTP_200_OK,
         )
 
-    def delete(self, request, pk):
+    def delete(self, request, pk: int):
         block = self.get_object(pk)
         block.delete()
 
@@ -171,7 +195,8 @@ class AdminComfortEditorialBlockDetailView(APIView):
 # ==================================================
 # 🔁 ADMIN — COMFORT EDITORIAL (REORDER)
 # ==================================================
-class AdminComfortEditorialBlockReorderView(APIView):
+
+class AdminComfortEditorialBlockReorderView(AdminJWTAPIView):
     """
     Reorder Comfort Editorial blocks.
 
@@ -180,8 +205,6 @@ class AdminComfortEditorialBlockReorderView(APIView):
       "order": [3, 1, 2]
     }
     """
-
-    permission_classes = [IsAdminUser]
 
     def post(self, request):
         order = request.data.get("order")
@@ -199,5 +222,6 @@ class AdminComfortEditorialBlockReorderView(APIView):
                 ).update(ordering=index)
 
         return Response(
-            {"message": "Order updated"}
+            {"message": "Order updated"},
+            status=status.HTTP_200_OK,
         )
