@@ -4,8 +4,8 @@ from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
-from rest_framework.exceptions import ValidationError
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 
 # 🔐 JWT AUTH
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -17,6 +17,23 @@ from store.services.order_service import (
     deliver_order,
     cancel_order,
 )
+
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin order views.
+
+    Enforces:
+    - JWT authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
 
 # ==================================================
 # CONSTANTS (SINGLE SOURCE OF TRUTH)
@@ -43,24 +60,7 @@ VALID_ORDERING_FIELDS = {
 
 
 # ==================================================
-# BASE ADMIN VIEW (JWT ENFORCED)
-# ==================================================
-
-class AdminJWTAPIView(APIView):
-    """
-    Base class for ALL admin order views.
-
-    Enforces:
-    - JWT Authentication
-    - Admin-only access
-    """
-
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAdminUser]
-
-
-# ==================================================
-# ADMIN ORDER LIST
+# ADMIN ORDER LIST (FILTER + SEARCH + SORT + PAGINATION)
 # ==================================================
 
 class AdminOrderListView(AdminJWTAPIView):
