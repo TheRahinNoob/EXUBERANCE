@@ -7,6 +7,9 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Product, ProductAttributeValue
 from store.services.product_attribute_service import (
     create_or_update_attribute_value,
@@ -16,10 +19,27 @@ from store.services.product_attribute_service import (
 )
 
 # ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin product attribute views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
 # ADMIN PRODUCT ATTRIBUTE LIST + UPSERT
 # ==================================================
 
-class AdminProductAttributeListView(APIView):
+class AdminProductAttributeListView(AdminJWTAPIView):
     """
     Admin-only product attribute endpoint.
 
@@ -29,8 +49,6 @@ class AdminProductAttributeListView(APIView):
     POST:
     - Assign or update an attribute value (UPSERT)
     """
-
-    permission_classes = [IsAdminUser]
 
     # -----------------------------
     # LIST ATTRIBUTE VALUES
@@ -97,7 +115,7 @@ class AdminProductAttributeListView(APIView):
 # ADMIN PRODUCT ATTRIBUTE DETAIL (UPDATE / DELETE)
 # ==================================================
 
-class AdminProductAttributeDetailView(APIView):
+class AdminProductAttributeDetailView(AdminJWTAPIView):
     """
     PATCH:
     - Update attribute value / ordering
@@ -105,8 +123,6 @@ class AdminProductAttributeDetailView(APIView):
     DELETE:
     - Remove attribute from product
     """
-
-    permission_classes = [IsAdminUser]
 
     # -----------------------------
     # UPDATE ATTRIBUTE VALUE
@@ -161,7 +177,7 @@ class AdminProductAttributeDetailView(APIView):
 # ADMIN PRODUCT ATTRIBUTE REORDER (DRAG & DROP)
 # ==================================================
 
-class AdminProductAttributeReorderView(APIView):
+class AdminProductAttributeReorderView(AdminJWTAPIView):
     """
     POST:
     - Reorder attribute values for a product
@@ -171,8 +187,6 @@ class AdminProductAttributeReorderView(APIView):
         "ordered_ids": [3, 7, 1, 5]
     }
     """
-
-    permission_classes = [IsAdminUser]
 
     @transaction.atomic
     def post(self, request, pk: int):
