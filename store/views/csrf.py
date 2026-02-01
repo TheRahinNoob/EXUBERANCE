@@ -1,27 +1,36 @@
 from django.http import JsonResponse
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.middleware.csrf import get_token
 from django.views.decorators.http import require_GET
 from django.views.decorators.cache import never_cache
 
 
 @require_GET
 @never_cache
-@ensure_csrf_cookie
 def get_csrf_token(request):
     """
-    CSRF bootstrap endpoint (CROSS-DOMAIN SAFE).
+    CSRF bootstrap endpoint (PRODUCTION SAFE).
 
-    Purpose:
-    - Forces Django to SET the `csrftoken` cookie
-    - Required for Next.js (Vercel) + Django SessionAuthentication
+    WHAT THIS DOES:
+    - Forces Django to generate a CSRF token
+    - Sets the `csrftoken` cookie (HttpOnly=False)
+    - RETURNS the token in JSON (🔥 critical 🔥)
 
-    IMPORTANT:
-    - Does NOT return the token in JSON
-    - Browser stores the cookie automatically
-    - Frontend must read cookie and send it back as:
-        X-CSRFToken: <csrftoken>
+    WHY THIS WORKS:
+    - Cookies alone are unreliable cross-site
+    - Returning token in JSON is the ONLY
+      stable solution for Vercel → Render
+
+    FRONTEND MUST:
+    - Call GET /api/csrf/
+    - Store token in memory
+    - Send it as X-CSRFToken on mutations
     """
+
+    csrf_token = get_token(request)
+
     return JsonResponse(
-        {"detail": "CSRF cookie set"},
+        {
+            "csrfToken": csrf_token
+        },
         status=200
     )
