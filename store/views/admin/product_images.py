@@ -7,17 +7,38 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Product, ProductImage
 from store.services.product_image_service import (
     add_product_image,
     set_primary_image,
 )
 
+
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin product image views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
 # ==================================================
 # ADMIN PRODUCT IMAGE LIST + CREATE
 # ==================================================
 
-class AdminProductImageListCreateView(APIView):
+class AdminProductImageListCreateView(AdminJWTAPIView):
     """
     Admin-only product image gallery endpoint.
 
@@ -28,8 +49,6 @@ class AdminProductImageListCreateView(APIView):
     - Upload a new product image
     - Optionally mark as primary
     """
-
-    permission_classes = [IsAdminUser]
 
     # -----------------------------
     # LIST PRODUCT IMAGES
@@ -105,7 +124,7 @@ class AdminProductImageListCreateView(APIView):
 # ADMIN PRODUCT IMAGE DETAIL (PATCH / DELETE)
 # ==================================================
 
-class AdminProductImageDetailView(APIView):
+class AdminProductImageDetailView(AdminJWTAPIView):
     """
     Admin-only image mutation endpoint.
 
@@ -115,8 +134,6 @@ class AdminProductImageDetailView(APIView):
     DELETE:
     - Permanently delete image
     """
-
-    permission_classes = [IsAdminUser]
 
     # -----------------------------
     # SET PRIMARY IMAGE
