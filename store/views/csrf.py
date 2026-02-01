@@ -1,19 +1,23 @@
 from django.http import JsonResponse
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_GET
 
 
+@require_GET
 @ensure_csrf_cookie
 def get_csrf_token(request):
     """
-    Sets the CSRF cookie for cross-domain session authentication.
+    CSRF bootstrap endpoint.
 
-    This endpoint is REQUIRED for:
-    - Next.js admin panel (Vercel)
-    - Django session-based auth
-    - POST / PATCH / DELETE requests
+    Purpose:
+    - Sets the `csrftoken` cookie for cross-domain usage
+    - Required for Next.js (Vercel) + Django session auth
 
-    It does NOT return the token in JSON.
-    It ONLY ensures the `csrftoken` cookie is set.
+    Notes:
+    - DOES NOT return the token itself
+    - DOES NOT mutate session
+    - Cookie is read automatically by the browser
+    - Frontend must send it back via `X-CSRFToken` header
     """
     return JsonResponse(
         {"detail": "CSRF cookie set"},
