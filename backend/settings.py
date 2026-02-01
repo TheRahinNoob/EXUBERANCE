@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import dj_database_url
+from datetime import timedelta
 
 # ==================================================
 # BASE DIR
@@ -15,7 +16,6 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-dev-key")
 
 DEBUG = os.environ.get("DEBUG", "False") == "True"
 
-
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
     "localhost,127.0.0.1,.onrender.com"
@@ -26,6 +26,7 @@ ALLOWED_HOSTS = os.environ.get(
 # APPLICATIONS
 # ==================================================
 INSTALLED_APPS = [
+    # Django
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -33,30 +34,36 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
+    # Third-party
     "corsheaders",
     "rest_framework",
+    "rest_framework.authtoken",
     "django_summernote",
 
+    # JWT
+    "rest_framework_simplejwt",
+
+    # Local
     "store",
 ]
 
 
 # ==================================================
-# MIDDLEWARE (ORDER IS CRITICAL)
+# MIDDLEWARE
 # ==================================================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
-    # 🔥 CORS MUST COME FIRST
+    # CORS FIRST
     "corsheaders.middleware.CorsMiddleware",
 
-    # 🔥 SESSION MUST COME BEFORE CSRF
+    # Sessions ONLY for Django admin
     "django.contrib.sessions.middleware.SessionMiddleware",
 
     "django.middleware.common.CommonMiddleware",
 
-    # 🔒 CSRF AFTER SESSION
+    # CSRF REQUIRED for Django admin
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -73,7 +80,7 @@ USE_X_FORWARDED_HOST = True
 
 
 # ==================================================
-# CORS (NEXT.JS → DJANGO)
+# CORS (FRONTEND → BACKEND)
 # ==================================================
 CORS_ALLOW_CREDENTIALS = True
 
@@ -82,33 +89,24 @@ CORS_ALLOWED_ORIGINS = [
     "https://exuberance-frontend-theta.vercel.app",
 ]
 
-# Required so Django accepts X-CSRFToken header
 CORS_ALLOW_HEADERS = [
     "accept",
     "authorization",
     "content-type",
     "origin",
     "user-agent",
-    "x-csrftoken",
     "x-requested-with",
 ]
 
 
 # ==================================================
-# CSRF (NEXT.JS + DJANGO ADMIN SAFE)
+# CSRF (DJANGO ADMIN ONLY)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
 ]
 
-# ❗ DO NOT override CSRF_HEADER_NAME
-# Django expects: X-CSRFToken → HTTP_X_CSRFTOKEN
-
-
-# ==================================================
-# SESSION & CSRF COOKIES (CROSS-SITE SAFE)
-# ==================================================
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
@@ -116,7 +114,7 @@ SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False  # must be readable by JS
+CSRF_COOKIE_HTTPONLY = False
 
 
 # ==================================================
@@ -196,15 +194,28 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF (SESSION AUTH + CSRF ENFORCED)
+# DJANGO REST FRAMEWORK (JWT-ONLY FOR APIs)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
+}
+
+
+# ==================================================
+# SIMPLE JWT CONFIG
+# ==================================================
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
 
