@@ -8,14 +8,24 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.category import Category
 from store.models.landing import HotCategory
 
 
 # ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
 # ADMIN HOT CATEGORY — LIST & CREATE (ATOMIC)
 # ==================================================
-class AdminHotCategoryListCreateView(APIView):
+class AdminHotCategoryListCreateView(AdminJWTAPIView):
     """
     Admin CMS API for Hot Categories (ATOMIC).
 
@@ -26,8 +36,6 @@ class AdminHotCategoryListCreateView(APIView):
     - Image upload required on creation
     - Backend is final authority
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # GET — LIST HOT CATEGORIES
@@ -135,13 +143,11 @@ class AdminHotCategoryListCreateView(APIView):
 # ==================================================
 # ADMIN HOT CATEGORY — DETAIL
 # ==================================================
-class AdminHotCategoryDetailView(APIView):
+class AdminHotCategoryDetailView(AdminJWTAPIView):
     """
     Admin CMS API for updating / deleting
     a single Hot Category.
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # PATCH — UPDATE HOT CATEGORY
