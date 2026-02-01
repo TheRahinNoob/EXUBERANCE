@@ -4,8 +4,11 @@ from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
-from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework import status
+
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from store.models import Order, OrderStatusAuditLog
 from store.services.order_service import (
@@ -38,11 +41,29 @@ VALID_ORDERING_FIELDS = {
     "-total_price",
 }
 
+
 # ==================================================
-# ADMIN ORDER LIST (FILTER + SEARCH + SORT + PAGINATION)
+# BASE ADMIN VIEW (JWT ENFORCED)
 # ==================================================
 
-class AdminOrderListView(APIView):
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin order views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
+# ADMIN ORDER LIST
+# ==================================================
+
+class AdminOrderListView(AdminJWTAPIView):
     """
     Admin-only list of orders.
 
@@ -54,8 +75,6 @@ class AdminOrderListView(APIView):
 
     Read-only.
     """
-
-    permission_classes = [IsAdminUser]
 
     def get(self, request):
         qs = Order.objects.all()
@@ -136,17 +155,16 @@ class AdminOrderListView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 # ==================================================
 # ADMIN ORDER DETAIL (READ-ONLY)
 # ==================================================
 
-class AdminOrderDetailView(APIView):
+class AdminOrderDetailView(AdminJWTAPIView):
     """
     Admin-only order detail view.
     Read-only.
     """
-
-    permission_classes = [IsAdminUser]
 
     def get(self, request, pk: int):
         order = get_object_or_404(
@@ -183,18 +201,17 @@ class AdminOrderDetailView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 # ==================================================
 # ADMIN ORDER STATUS UPDATE (STATE MACHINE SAFE)
 # ==================================================
 
-class AdminOrderStatusUpdateView(APIView):
+class AdminOrderStatusUpdateView(AdminJWTAPIView):
     """
     Admin-only order status transition endpoint.
 
     All transitions are enforced via service layer.
     """
-
-    permission_classes = [IsAdminUser]
 
     def post(self, request, pk: int):
         order = get_object_or_404(Order, pk=pk)
@@ -271,17 +288,16 @@ class AdminOrderStatusUpdateView(APIView):
             status=status.HTTP_200_OK,
         )
 
+
 # ==================================================
 # ADMIN ORDER AUDIT TIMELINE (READ-ONLY)
 # ==================================================
 
-class AdminOrderAuditView(APIView):
+class AdminOrderAuditView(AdminJWTAPIView):
     """
     Admin-only order status audit timeline.
     Immutable historical data.
     """
-
-    permission_classes = [IsAdminUser]
 
     def get(self, request, pk: int):
         order = get_object_or_404(Order, pk=pk)
