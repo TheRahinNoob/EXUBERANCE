@@ -94,15 +94,13 @@ CORS_ALLOW_HEADERS = [
 
 
 # ==================================================
-# CSRF (CROSS-DOMAIN SAFE)
+# CSRF (SAFE FOR DJANGO ADMIN + NEXT.JS)
 # ==================================================
+
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
 ]
-
-# 🔥 CRITICAL FOR CROSS-DOMAIN CSRF
-CSRF_COOKIE_DOMAIN = None if DEBUG else ".onrender.com"
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -111,7 +109,8 @@ SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False  # must be readable by JS
+CSRF_COOKIE_HTTPONLY = False
+
 
 
 # ==================================================
