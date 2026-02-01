@@ -15,11 +15,14 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework import status
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Category
 from store.services.category_service import (
     create_category,
     update_category,
-    delete_category,      # 🔥 SOFT DELETE (ARCHIVE)
+    delete_category,
     reorder_categories,
 )
 
@@ -28,20 +31,6 @@ from store.services.category_service import (
 # ==================================================
 
 def parse_datetime_or_none(value: Optional[str]):
-    """
-    Parse ISO-8601 datetime safely.
-
-    Accepts:
-    - None
-    - ""
-    - "null"
-    - "undefined"
-
-    Returns:
-    - timezone-aware datetime
-    - or None
-    """
-
     if value in (None, "", "null", "undefined"):
         return None
 
@@ -58,22 +47,28 @@ def parse_datetime_or_none(value: Optional[str]):
 
 
 # ==================================================
-# ADMIN CATEGORY LIST + CREATE
-# ==================================================
-# GET    /api/admin/categories/
-# POST   /api/admin/categories/
+# BASE ADMIN VIEW (JWT ENFORCED)
 # ==================================================
 
-class AdminCategoryListCreateView(APIView):
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin views.
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAdminUser]
 
+
+# ==================================================
+# ADMIN CATEGORY LIST + CREATE
+# ==================================================
+
+class AdminCategoryListCreateView(AdminJWTAPIView):
+
     def get(self, request):
-        """
-        Flat list of ALL categories (admin only).
-
-        Includes active + inactive (archived).
-        """
-
         categories = (
             Category.objects
             .all()
@@ -91,7 +86,6 @@ class AdminCategoryListCreateView(APIView):
                     "priority": c.priority,
                     "is_active": c.is_active,
 
-                    # 🔥 CAMPAIGN
                     "is_campaign": c.is_campaign,
                     "starts_at": c.starts_at.isoformat() if c.starts_at else None,
                     "ends_at": c.ends_at.isoformat() if c.ends_at else None,
@@ -103,24 +97,17 @@ class AdminCategoryListCreateView(APIView):
         )
 
     def post(self, request):
-        """
-        Create a new category (admin).
-        """
-
         data = request.data or {}
 
         name = data.get("name")
         slug = data.get("slug")
 
         if not name or not str(name).strip():
-            raise DRFValidationError({
-                "name": "Category name is required."
-            })
+            raise DRFValidationError({"name": "Category name is required."})
 
         parent = None
-        parent_id = data.get("parent_id")
-        if parent_id is not None:
-            parent = get_object_or_404(Category, pk=parent_id)
+        if data.get("parent_id") is not None:
+            parent = get_object_or_404(Category, pk=data["parent_id"])
 
         try:
             category = create_category(
@@ -131,7 +118,6 @@ class AdminCategoryListCreateView(APIView):
                 priority=data.get("priority", 0),
                 is_active=data.get("is_active", True),
 
-                # 🔥 CAMPAIGN
                 is_campaign=bool(data.get("is_campaign", False)),
                 starts_at=parse_datetime_or_none(data.get("starts_at")),
                 ends_at=parse_datetime_or_none(data.get("ends_at")),
@@ -141,40 +127,18 @@ class AdminCategoryListCreateView(APIView):
             raise DRFValidationError({"detail": e.messages})
 
         return Response(
-            {
-                "id": category.id,
-                "name": category.name,
-                "slug": category.slug,
-                "parent_id": category.parent_id,
-                "ordering": category.ordering,
-                "priority": category.priority,
-                "is_active": category.is_active,
-
-                # 🔥 CAMPAIGN
-                "is_campaign": category.is_campaign,
-                "starts_at": category.starts_at.isoformat() if category.starts_at else None,
-                "ends_at": category.ends_at.isoformat() if category.ends_at else None,
-                "show_countdown": category.show_countdown,
-            },
+            {"id": category.id},
             status=status.HTTP_201_CREATED,
         )
 
 
 # ==================================================
-# ADMIN CATEGORY DETAIL (UPDATE / SOFT DELETE)
-# ==================================================
-# PATCH   /api/admin/categories/<id>/
-# DELETE  /api/admin/categories/<id>/
+# ADMIN CATEGORY DETAIL
 # ==================================================
 
-class AdminCategoryDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminCategoryDetailView(AdminJWTAPIView):
 
     def patch(self, request, pk: int):
-        """
-        Partial update of category (admin).
-        """
-
         category = get_object_or_404(Category, pk=pk)
         data = request.data or {}
 
@@ -204,7 +168,6 @@ class AdminCategoryDetailView(APIView):
                 priority=data.get("priority"),
                 is_active=data.get("is_active"),
 
-                # 🔥 CAMPAIGN
                 is_campaign=data.get("is_campaign"),
                 starts_at=parse_datetime_or_none(data.get("starts_at"))
                 if "starts_at" in data else None,
@@ -215,41 +178,12 @@ class AdminCategoryDetailView(APIView):
         except DjangoValidationError as e:
             raise DRFValidationError({"detail": e.messages})
 
-        return Response(
-            {
-                "id": category.id,
-                "name": category.name,
-                "slug": category.slug,
-                "parent_id": category.parent_id,
-                "ordering": category.ordering,
-                "priority": category.priority,
-                "is_active": category.is_active,
-
-                # 🔥 CAMPAIGN
-                "is_campaign": category.is_campaign,
-                "starts_at": category.starts_at.isoformat() if category.starts_at else None,
-                "ends_at": category.ends_at.isoformat() if category.ends_at else None,
-                "show_countdown": category.show_countdown,
-            },
-            status=status.HTTP_200_OK,
-        )
+        return Response({"status": "updated"}, status=status.HTTP_200_OK)
 
     def delete(self, request, pk: int):
-        """
-        SOFT DELETE (ARCHIVE) category.
-
-        - Always succeeds (idempotent)
-        - Products DO NOT block
-        - Children auto-archived (service layer)
-        """
-
         category = get_object_or_404(Category, pk=pk)
 
-        try:
-            delete_category(category=category)
-        except DjangoValidationError as e:
-            # Safety net — should almost never happen now
-            raise DRFValidationError({"detail": e.messages})
+        delete_category(category=category)
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -257,29 +191,15 @@ class AdminCategoryDetailView(APIView):
 # ==================================================
 # ADMIN CATEGORY TREE
 # ==================================================
-# GET /api/admin/categories/tree/
-# ==================================================
 
-class AdminCategoryTreeView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminCategoryTreeView(AdminJWTAPIView):
 
     def get(self, request):
-        """
-        Return ALL categories (active + archived) as a tree.
-        """
-
         categories = (
             Category.objects
             .all()
             .order_by("ordering", "-priority", "name")
-            .only(
-                "id",
-                "name",
-                "slug",
-                "parent_id",
-                "is_active",
-                "is_campaign",
-            )
+            .only("id", "name", "slug", "parent_id", "is_active", "is_campaign")
         )
 
         node_map: Dict[int, dict] = {}
@@ -299,23 +219,17 @@ class AdminCategoryTreeView(APIView):
             children_map[c.parent_id].append(node)
 
         for parent_id, children in children_map.items():
-            if parent_id is not None and parent_id in node_map:
+            if parent_id in node_map:
                 node_map[parent_id]["children"] = children
 
-        return Response(
-            children_map[None],
-            status=status.HTTP_200_OK,
-        )
+        return Response(children_map[None], status=status.HTTP_200_OK)
 
 
 # ==================================================
 # ADMIN CATEGORY REORDER
 # ==================================================
-# POST /api/admin/categories/reorder/
-# ==================================================
 
-class AdminCategoryReorderView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminCategoryReorderView(AdminJWTAPIView):
 
     @transaction.atomic
     def post(self, request):
@@ -328,7 +242,4 @@ class AdminCategoryReorderView(APIView):
 
         reorder_categories(ordered_ids=ids)
 
-        return Response(
-            {"status": "ok"},
-            status=status.HTTP_200_OK,
-        )
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
