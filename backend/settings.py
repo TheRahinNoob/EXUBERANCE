@@ -18,7 +18,7 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
-    "localhost,127.0.0.1,.onrender.com,exuberance-backend.onrender.com"
+    "localhost,127.0.0.1,.onrender.com"
 ).split(",")
 
 
@@ -50,12 +50,12 @@ MIDDLEWARE = [
 
     "corsheaders.middleware.CorsMiddleware",
 
-    # 🔥 sessions MUST come before CSRF
+    # sessions MUST come before CSRF
     "django.contrib.sessions.middleware.SessionMiddleware",
 
     "django.middleware.common.CommonMiddleware",
 
-    # 🔒 CSRF AFTER sessions
+    # CSRF AFTER sessions
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -81,24 +81,29 @@ CORS_ALLOWED_ORIGINS = [
     "https://exuberance-frontend-theta.vercel.app",
 ]
 
+# REQUIRED — allow CSRF header explicitly
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
 
 # ==================================================
-# CSRF (CORRECT — DO NOT OVERRIDE HEADER)
+# CSRF (CROSS-DOMAIN SAFE)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
-    "https://exuberance-backend.onrender.com",
 ]
 
-# ❌ DO NOT set CSRF_HEADER_NAME
-# Django already expects:
-#   X-CSRFToken → HTTP_X_CSRFTOKEN internally
+# 🔥 CRITICAL FOR CROSS-DOMAIN CSRF
+CSRF_COOKIE_DOMAIN = None if DEBUG else ".onrender.com"
 
-
-# ==================================================
-# SESSION & CSRF COOKIES (CROSS-SITE SAFE)
-# ==================================================
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
@@ -134,7 +139,7 @@ WSGI_APPLICATION = "backend.wsgi.application"
 
 
 # ==================================================
-# DATABASE (RENDER-READY)
+# DATABASE
 # ==================================================
 DATABASES = {
     "default": dj_database_url.config(
@@ -170,7 +175,6 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# 🔥 FIXES DJANGO ADMIN CRASH (manifest error)
 if DEBUG:
     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 else:
@@ -187,7 +191,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF (SESSION AUTH + CSRF ENFORCED)
+# DRF
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
