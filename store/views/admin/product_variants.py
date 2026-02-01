@@ -7,6 +7,9 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Product, ProductVariant
 from store.services.product_variant_service import (
     create_product_variant,
@@ -14,23 +17,34 @@ from store.services.product_variant_service import (
     delete_product_variant,
 )
 
+
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin product variant views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
 # ==================================================
 # ADMIN PRODUCT VARIANT LIST + CREATE
 # ==================================================
-#
-# Rules:
-# - Admin only
-# - Product is the parent (single source of truth)
-# - All mutations go through service layer
-# - Atomic writes
 #
 # Endpoints:
 # GET  /api/admin/products/<pk>/variants/
 # POST /api/admin/products/<pk>/variants/
 # ==================================================
 
-class AdminProductVariantListCreateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductVariantListCreateView(AdminJWTAPIView):
 
     # -----------------------------
     # LIST VARIANTS
@@ -94,7 +108,7 @@ class AdminProductVariantListCreateView(APIView):
 
 
 # ==================================================
-# ADMIN PRODUCT VARIANT DETAIL (MUTATIONS)
+# ADMIN PRODUCT VARIANT DETAIL (UPDATE / DELETE)
 # ==================================================
 #
 # Endpoints:
@@ -102,8 +116,7 @@ class AdminProductVariantListCreateView(APIView):
 # DELETE /api/admin/product-variants/<variant_id>/
 # ==================================================
 
-class AdminProductVariantDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductVariantDetailView(AdminJWTAPIView):
 
     # -----------------------------
     # UPDATE STOCK ONLY
