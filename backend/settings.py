@@ -48,14 +48,15 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
+    # 🔥 CORS MUST COME FIRST
     "corsheaders.middleware.CorsMiddleware",
 
-    # sessions MUST come before CSRF
+    # 🔥 SESSION MUST COME BEFORE CSRF
     "django.contrib.sessions.middleware.SessionMiddleware",
 
     "django.middleware.common.CommonMiddleware",
 
-    # CSRF AFTER sessions
+    # 🔒 CSRF AFTER SESSION
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -81,7 +82,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://exuberance-frontend-theta.vercel.app",
 ]
 
-# REQUIRED — allow CSRF header explicitly
+# Required so Django accepts X-CSRFToken header
 CORS_ALLOW_HEADERS = [
     "accept",
     "authorization",
@@ -94,14 +95,20 @@ CORS_ALLOW_HEADERS = [
 
 
 # ==================================================
-# CSRF (SAFE FOR DJANGO ADMIN + NEXT.JS)
+# CSRF (NEXT.JS + DJANGO ADMIN SAFE)
 # ==================================================
-
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
 ]
 
+# ❗ DO NOT override CSRF_HEADER_NAME
+# Django expects: X-CSRFToken → HTTP_X_CSRFTOKEN
+
+
+# ==================================================
+# SESSION & CSRF COOKIES (CROSS-SITE SAFE)
+# ==================================================
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
@@ -109,8 +116,7 @@ SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False
-
+CSRF_COOKIE_HTTPONLY = False  # must be readable by JS
 
 
 # ==================================================
@@ -190,7 +196,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF
+# DRF (SESSION AUTH + CSRF ENFORCED)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
