@@ -10,6 +10,9 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import Product
 from store.services.product_service import (
     create_product,
@@ -18,6 +21,23 @@ from store.services.product_service import (
     update_product_basic_info,
     update_product_categories,
 )
+
+# ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin product views.
+
+    Enforces:
+    - JWT authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
 
 # ==================================================
 # CONSTANTS
@@ -31,8 +51,7 @@ MAX_PAGE_SIZE = 100
 # ADMIN PRODUCT LIST + CREATE
 # ==================================================
 
-class AdminProductListView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductListView(AdminJWTAPIView):
 
     def get(self, request):
         qs = (
@@ -124,8 +143,7 @@ class AdminProductListView(APIView):
 # ADMIN PRODUCT DETAIL + PATCH
 # ==================================================
 
-class AdminProductDetailView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductDetailView(AdminJWTAPIView):
 
     def get(self, request, pk: int):
         product = get_object_or_404(
@@ -231,8 +249,7 @@ class AdminProductDetailView(APIView):
 # ADMIN PRODUCT BASIC INFO
 # ==================================================
 
-class AdminProductBasicInfoUpdateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductBasicInfoUpdateView(AdminJWTAPIView):
 
     def patch(self, request, pk: int):
         product = get_object_or_404(Product, pk=pk)
@@ -266,8 +283,7 @@ class AdminProductBasicInfoUpdateView(APIView):
 # ADMIN PRODUCT DEACTIVATION
 # ==================================================
 
-class AdminProductDeactivateView(APIView):
-    permission_classes = [IsAdminUser]
+class AdminProductDeactivateView(AdminJWTAPIView):
 
     def post(self, request, pk: int):
         product = get_object_or_404(Product, pk=pk)
