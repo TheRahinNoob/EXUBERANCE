@@ -52,7 +52,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
 
-    # 🔒 CSRF MUST be here
+    # 🔒 CSRF MUST come AFTER sessions
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -69,7 +69,7 @@ USE_X_FORWARDED_HOST = True
 
 
 # ==================================================
-# CORS
+# CORS (Vercel → Render)
 # ==================================================
 CORS_ALLOW_CREDENTIALS = True
 
@@ -80,7 +80,7 @@ CORS_ALLOWED_ORIGINS = [
 
 
 # ==================================================
-# CSRF (CRITICAL FIXES)
+# CSRF (🔥 CORRECT & SAFE)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
@@ -88,12 +88,12 @@ CSRF_TRUSTED_ORIGINS = [
     "https://exuberance-backend.onrender.com",
 ]
 
-# 🔥 VERY IMPORTANT
-CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"
+# ❌ DO NOT set CSRF_HEADER_NAME
+# Django already expects: X-CSRFToken → HTTP_X_CSRFTOKEN internally
 
 
 # ==================================================
-# SESSION & CSRF COOKIES
+# SESSION & CSRF COOKIES (CROSS-SITE)
 # ==================================================
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -179,7 +179,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF (SESSION + CSRF SAFE)
+# DRF (SESSION + CSRF ENFORCED)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
