@@ -4,13 +4,16 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 # ==================================================
-# CSRF TOKEN ENDPOINT (NEXT.JS / SPA BOOTSTRAP)
+# JWT AUTH ENDPOINTS
 # ==================================================
-from store.views.csrf import get_csrf_token
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 urlpatterns = [
     # =====================================
-    # DJANGO ADMIN (SYSTEM / FALLBACK)
+    # DJANGO ADMIN (SESSION + CSRF ONLY)
     # =====================================
     path("admin/", admin.site.urls),
 
@@ -20,23 +23,24 @@ urlpatterns = [
     path("summernote/", include("django_summernote.urls")),
 
     # =====================================
-    # CSRF TOKEN (🔥 MUST BE PUBLIC & SIMPLE 🔥)
+    # JWT AUTH (NEXT.JS ADMIN LOGIN)
     # =====================================
-    path("api/csrf/", get_csrf_token),
+    path("api/auth/login/", TokenObtainPairView.as_view(), name="jwt-login"),
+    path("api/auth/refresh/", TokenRefreshView.as_view(), name="jwt-refresh"),
 
     # =====================================
-    # PUBLIC / USER APIs
+    # PUBLIC APIs (STORE / USER)
     # =====================================
     path("api/", include("store.urls")),
 
     # =====================================
-    # ADMIN APIs (NEXT.JS ADMIN PANEL)
+    # ADMIN APIs (JWT-PROTECTED)
     # =====================================
     path("api/admin/", include("store.admin_urls")),
 ]
 
 # =====================================
-# MEDIA FILES (DEVELOPMENT ONLY)
+# MEDIA FILES (DEV ONLY)
 # =====================================
 if settings.DEBUG:
     urlpatterns += static(
