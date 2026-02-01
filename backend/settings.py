@@ -18,7 +18,7 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
-    "localhost,127.0.0.1,.onrender.com"
+    "localhost,127.0.0.1,.onrender.com,exuberance-backend.onrender.com"
 ).split(",")
 
 
@@ -42,17 +42,20 @@ INSTALLED_APPS = [
 
 
 # ==================================================
-# MIDDLEWARE
+# MIDDLEWARE (ORDER IS CRITICAL)
 # ==================================================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
     "corsheaders.middleware.CorsMiddleware",
+
+    # 🔥 MUST be before CSRF
     "django.contrib.sessions.middleware.SessionMiddleware",
+
     "django.middleware.common.CommonMiddleware",
 
-    # 🔒 CSRF MUST come AFTER sessions
+    # 🔒 CSRF AFTER sessions
     "django.middleware.csrf.CsrfViewMiddleware",
 
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -69,7 +72,7 @@ USE_X_FORWARDED_HOST = True
 
 
 # ==================================================
-# CORS (Vercel → Render)
+# CORS (NEXT.JS → DJANGO)
 # ==================================================
 CORS_ALLOW_CREDENTIALS = True
 
@@ -80,7 +83,7 @@ CORS_ALLOWED_ORIGINS = [
 
 
 # ==================================================
-# CSRF (🔥 CORRECT & SAFE)
+# CSRF (🚨 DO NOT OVERRIDE HEADER NAME)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
@@ -89,20 +92,21 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ❌ DO NOT set CSRF_HEADER_NAME
-# Django already expects: X-CSRFToken → HTTP_X_CSRFTOKEN internally
+# Django expects:
+#   X-CSRFToken  →  HTTP_X_CSRFTOKEN (internally)
 
 
 # ==================================================
 # SESSION & CSRF COOKIES (CROSS-SITE)
 # ==================================================
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = False   # ❗ MUST be readable by JS
 
 
 # ==================================================
@@ -179,7 +183,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DRF (SESSION + CSRF ENFORCED)
+# DRF (SESSION AUTH + CSRF ENFORCED)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
