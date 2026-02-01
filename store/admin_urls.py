@@ -8,7 +8,6 @@ from store.views.csrf import get_csrf_token
 # ==================================================
 # ORDERS
 # ==================================================
-
 from store.views.admin.orders import (
     AdminOrderListView,
     AdminOrderDetailView,
@@ -19,7 +18,6 @@ from store.views.admin.orders import (
 # ==================================================
 # PRODUCTS
 # ==================================================
-
 from store.views.admin.products import (
     AdminProductListView,
     AdminProductDetailView,
@@ -55,7 +53,6 @@ from store.views.admin.product_attribute_definitions import (
 # ==================================================
 # CATEGORIES
 # ==================================================
-
 from store.views.admin.categories import (
     AdminCategoryTreeView,
     AdminCategoryListCreateView,
@@ -66,7 +63,6 @@ from store.views.admin.categories import (
 # ==================================================
 # CMS — LANDING CORE
 # ==================================================
-
 from store.views.admin.cms.landing_blocks import (
     AdminLandingBlockListCreateView,
     AdminLandingBlockDetailView,
@@ -112,7 +108,6 @@ from store.views.admin.cms.comfort_rails import (
 # ==================================================
 # CMS — COMFORT EDITORIAL 🔥
 # ==================================================
-
 from store.views.admin.cms.comfort_editorial import (
     AdminComfortEditorialBlockListCreateView,
     AdminComfortEditorialBlockDetailView,
@@ -122,13 +117,11 @@ from store.views.admin.cms.comfort_editorial import (
 # ==================================================
 # APP NAMESPACE
 # ==================================================
-
 app_name = "admin_api"
 
 # ==================================================
 # URLPATTERNS — ADMIN API ONLY
 # ==================================================
-
 urlpatterns = [
 
     # ==================================================

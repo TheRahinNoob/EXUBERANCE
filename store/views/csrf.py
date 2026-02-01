@@ -21,8 +21,7 @@ def get_csrf_token(request):
     - Frontend must read cookie and send it back as:
         X-CSRFToken: <csrftoken>
     """
-
     return JsonResponse(
         {"detail": "CSRF cookie set"},
-        status=200,
+        status=200
     )

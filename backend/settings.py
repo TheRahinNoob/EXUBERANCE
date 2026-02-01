@@ -50,7 +50,7 @@ MIDDLEWARE = [
 
     "corsheaders.middleware.CorsMiddleware",
 
-    # 🔥 MUST be before CSRF
+    # 🔥 sessions MUST come before CSRF
     "django.contrib.sessions.middleware.SessionMiddleware",
 
     "django.middleware.common.CommonMiddleware",
@@ -83,7 +83,7 @@ CORS_ALLOWED_ORIGINS = [
 
 
 # ==================================================
-# CSRF (🚨 DO NOT OVERRIDE HEADER NAME)
+# CSRF (CORRECT — DO NOT OVERRIDE HEADER)
 # ==================================================
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
@@ -92,12 +92,12 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # ❌ DO NOT set CSRF_HEADER_NAME
-# Django expects:
-#   X-CSRFToken  →  HTTP_X_CSRFTOKEN (internally)
+# Django already expects:
+#   X-CSRFToken → HTTP_X_CSRFTOKEN internally
 
 
 # ==================================================
-# SESSION & CSRF COOKIES (CROSS-SITE)
+# SESSION & CSRF COOKIES (CROSS-SITE SAFE)
 # ==================================================
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
@@ -106,7 +106,7 @@ SESSION_COOKIE_SAMESITE = "None"
 CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False   # ❗ MUST be readable by JS
+CSRF_COOKIE_HTTPONLY = False  # must be readable by JS
 
 
 # ==================================================
@@ -170,7 +170,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# 🔥 FIXES DJANGO ADMIN CRASH (manifest error)
+if DEBUG:
+    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+else:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
