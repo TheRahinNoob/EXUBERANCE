@@ -17,7 +17,6 @@
 # - No invalid banner states
 # - No partial uploads
 # - Ordering consistency
-# - CSRF-safe session auth
 #
 # ==================================================
 
@@ -32,7 +31,17 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.hero_banner import HeroBanner
+
+
+# ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
 
 
 # ==================================================
@@ -98,7 +107,7 @@ def _serialize_hero_banner(banner: HeroBanner) -> Dict[str, Any]:
 # LIST + CREATE
 # ==================================================
 
-class AdminHeroBannerListCreateView(APIView):
+class AdminHeroBannerListCreateView(AdminJWTAPIView):
     """
     GET:
     - List ALL hero banners (active + inactive)
@@ -109,7 +118,6 @@ class AdminHeroBannerListCreateView(APIView):
     - Multipart upload (images)
     """
 
-    permission_classes = [IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
 
     # --------------------------------------------------
@@ -184,7 +192,7 @@ class AdminHeroBannerListCreateView(APIView):
 # DETAIL — UPDATE / DELETE
 # ==================================================
 
-class AdminHeroBannerDetailView(APIView):
+class AdminHeroBannerDetailView(AdminJWTAPIView):
     """
     PATCH:
     - Update images (replace)
@@ -195,7 +203,6 @@ class AdminHeroBannerDetailView(APIView):
     - Hard delete (explicit)
     """
 
-    permission_classes = [IsAdminUser]
     parser_classes = [MultiPartParser, FormParser]
 
     # --------------------------------------------------
