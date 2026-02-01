@@ -9,6 +9,9 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework import status
 
+# 🔐 JWT AUTH
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models import ProductAttribute
 from store.services.product_attribute_definition_service import (
     create_attribute_definition,
@@ -17,13 +20,30 @@ from store.services.product_attribute_definition_service import (
 )
 
 # ==================================================
+# BASE ADMIN VIEW (JWT ENFORCED)
+# ==================================================
+
+class AdminJWTAPIView(APIView):
+    """
+    Base class for ALL admin attribute definition views.
+
+    Enforces:
+    - JWT Authentication
+    - Admin-only access
+    """
+
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
+
+
+# ==================================================
 # ADMIN ATTRIBUTE DEFINITIONS — LIST & CREATE
 # ==================================================
 # GET  /api/admin/attribute-definitions/
 # POST /api/admin/attribute-definitions/
 # ==================================================
 
-class AdminProductAttributeDefinitionListView(APIView):
+class AdminProductAttributeDefinitionListView(AdminJWTAPIView):
     """
     Global product attribute definitions (ADMIN).
 
@@ -31,8 +51,6 @@ class AdminProductAttributeDefinitionListView(APIView):
     - Shows active + archived attributes
     - No destructive operations
     """
-
-    permission_classes = [IsAdminUser]
 
     def get(self, request):
         attributes = (
@@ -85,7 +103,7 @@ class AdminProductAttributeDefinitionListView(APIView):
 # DELETE /api/admin/attribute-definitions/<id>/
 # ==================================================
 
-class AdminProductAttributeDefinitionDetailView(APIView):
+class AdminProductAttributeDefinitionDetailView(AdminJWTAPIView):
     """
     Attribute definition mutation (ADMIN).
 
@@ -96,8 +114,6 @@ class AdminProductAttributeDefinitionDetailView(APIView):
     DELETE:
     - 🔥 SOFT DELETE (archive)
     """
-
-    permission_classes = [IsAdminUser]
 
     def patch(self, request, pk: int):
         attribute = get_object_or_404(ProductAttribute, pk=pk)
