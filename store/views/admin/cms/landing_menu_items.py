@@ -30,8 +30,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from store.models.landing import LandingMenuItem
 from store.models.category import Category
+
+
+# ==================================================
+# JWT BASE ADMIN VIEW (NO CSRF, NO COOKIES)
+# ==================================================
+class AdminJWTAPIView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAdminUser]
 
 
 # ==================================================
@@ -74,7 +84,7 @@ def serialize_landing_menu_item(
 # LIST + CREATE
 # ==================================================
 
-class AdminLandingMenuItemListCreateView(APIView):
+class AdminLandingMenuItemListCreateView(AdminJWTAPIView):
     """
     GET:
     - List ALL landing menu items (active + inactive)
@@ -87,8 +97,6 @@ class AdminLandingMenuItemListCreateView(APIView):
         • category is active
         • category is unique
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # GET — LIST
@@ -158,7 +166,7 @@ class AdminLandingMenuItemListCreateView(APIView):
 # DETAIL — UPDATE / DELETE
 # ==================================================
 
-class AdminLandingMenuItemDetailView(APIView):
+class AdminLandingMenuItemDetailView(AdminJWTAPIView):
     """
     PATCH:
     - Update visibility, ordering, SEO
@@ -167,8 +175,6 @@ class AdminLandingMenuItemDetailView(APIView):
     DELETE:
     - Hard delete (explicit & intentional)
     """
-
-    permission_classes = [IsAdminUser]
 
     # --------------------------------------------------
     # PATCH — UPDATE
