@@ -37,11 +37,14 @@ INSTALLED_APPS = [
     # Third-party
     "corsheaders",
     "rest_framework",
-    "rest_framework.authtoken",
     "django_summernote",
 
     # JWT
     "rest_framework_simplejwt",
+
+    # Media (Cloudinary)
+    "cloudinary",
+    "cloudinary_storage",
 
     # Local
     "store",
@@ -173,7 +176,7 @@ USE_TZ = True
 
 
 # ==================================================
-# STATIC & MEDIA
+# STATIC FILES
 # ==================================================
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
@@ -183,8 +186,19 @@ if DEBUG:
 else:
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
+
+# ==================================================
+# MEDIA — CLOUDINARY (FIXES 404 FOREVER)
+# ==================================================
+DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME"),
+    "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
+    "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
+}
+
+MEDIA_URL = "/media/"  # kept for compatibility
 
 
 # ==================================================
@@ -194,7 +208,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # ==================================================
-# DJANGO REST FRAMEWORK (JWT-ONLY FOR APIs)
+# DJANGO REST FRAMEWORK (JWT ONLY)
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -215,7 +229,6 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
-    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
 
