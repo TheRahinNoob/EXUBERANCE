@@ -47,25 +47,25 @@ class AdminHotCategoryListCreateView(AdminJWTAPIView):
             .order_by("ordering", "id")
         )
 
-        return Response(
-            [
-                {
-                    "id": item.id,
-                    "ordering": item.ordering,
-                    "is_active": item.is_active,
-                    "image": (
-                        request.build_absolute_uri(item.image.url)
-                        if item.image else None
-                    ),
-                    "category": {
-                        "id": item.category.id,
-                        "name": item.category.name,
-                        "slug": item.category.slug,
-                    },
-                }
-                for item in items
-            ]
-        )
+        response = [
+            {
+                "id": item.id,
+                "ordering": item.ordering,
+                "is_active": item.is_active,
+                "image": (
+                    request.build_absolute_uri(item.image.url)
+                    if item.image else None
+                ),
+                "category": {
+                    "id": item.category.id,
+                    "name": item.category.name,
+                    "slug": item.category.slug,
+                },
+            }
+            for item in items
+        ]
+
+        return Response(response)
 
     # --------------------------------------------------
     # POST — CREATE HOT CATEGORY
@@ -79,13 +79,13 @@ class AdminHotCategoryListCreateView(AdminJWTAPIView):
         if not category_id:
             return Response(
                 {"detail": "category_id is required"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         if not image:
             return Response(
                 {"detail": "image file is required"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         category = get_object_or_404(Category, pk=category_id)
@@ -93,33 +93,29 @@ class AdminHotCategoryListCreateView(AdminJWTAPIView):
         if not category.is_active:
             return Response(
                 {"detail": "Inactive categories cannot be used"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         if HotCategory.objects.filter(category=category).exists():
             return Response(
                 {"detail": "This category already has a Hot Category"},
-                status=status.HTTP_409_CONFLICT,
+                status=status.HTTP_409_CONFLICT
             )
 
-        max_ordering = (
-            HotCategory.objects.aggregate(
-                max_val=Max("ordering")
-            )["max_val"]
-            or 0
-        )
+        # Ensure deterministic ordering
+        max_ordering = HotCategory.objects.aggregate(max_val=Max("ordering"))["max_val"] or 0
 
         try:
             hot_category = HotCategory.objects.create(
                 category=category,
                 image=image,
                 ordering=max_ordering + 1,
-                is_active=bool(is_active),
+                is_active=bool(is_active)
             )
         except ValidationError as e:
             return Response(
                 {"detail": e.message_dict or str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         return Response(
@@ -127,26 +123,23 @@ class AdminHotCategoryListCreateView(AdminJWTAPIView):
                 "id": hot_category.id,
                 "ordering": hot_category.ordering,
                 "is_active": hot_category.is_active,
-                "image": request.build_absolute_uri(
-                    hot_category.image.url
-                ),
+                "image": request.build_absolute_uri(hot_category.image.url),
                 "category": {
                     "id": category.id,
                     "name": category.name,
-                    "slug": category.slug,
+                    "slug": category.slug
                 },
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED
         )
 
 
 # ==================================================
-# ADMIN HOT CATEGORY — DETAIL
+# ADMIN HOT CATEGORY — DETAIL / UPDATE / DELETE
 # ==================================================
 class AdminHotCategoryDetailView(AdminJWTAPIView):
     """
-    Admin CMS API for updating / deleting
-    a single Hot Category.
+    Admin CMS API for updating / deleting a single Hot Category.
     """
 
     # --------------------------------------------------
@@ -156,22 +149,18 @@ class AdminHotCategoryDetailView(AdminJWTAPIView):
     def patch(self, request, pk):
         hot_category = get_object_or_404(
             HotCategory.objects.select_related("category"),
-            pk=pk,
+            pk=pk
         )
 
-        data = request.data
         updated = False
+        data = request.data
 
-        # -----------------------------
         # Toggle active
-        # -----------------------------
         if "is_active" in data:
             hot_category.is_active = bool(data["is_active"])
             updated = True
 
-        # -----------------------------
-        # Ordering update
-        # -----------------------------
+        # Update ordering
         if "ordering" in data:
             try:
                 ordering = int(data["ordering"])
@@ -182,12 +171,10 @@ class AdminHotCategoryDetailView(AdminJWTAPIView):
             except (TypeError, ValueError):
                 return Response(
                     {"detail": "ordering must be a non-negative integer"},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # -----------------------------
-        # Image replacement
-        # -----------------------------
+        # Replace image if provided
         if "image" in request.FILES:
             hot_category.image = request.FILES["image"]
             updated = True
@@ -195,14 +182,14 @@ class AdminHotCategoryDetailView(AdminJWTAPIView):
         if not updated:
             return Response(
                 {"detail": "No valid fields provided"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Final safety: category must remain active
+        # Ensure category remains active
         if not hot_category.category.is_active:
             return Response(
                 {"detail": "Inactive categories cannot be used"},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
@@ -211,24 +198,20 @@ class AdminHotCategoryDetailView(AdminJWTAPIView):
         except ValidationError as e:
             return Response(
                 {"detail": e.message_dict or str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-        return Response(
-            {
-                "id": hot_category.id,
-                "ordering": hot_category.ordering,
-                "is_active": hot_category.is_active,
-                "image": request.build_absolute_uri(
-                    hot_category.image.url
-                ),
-                "category": {
-                    "id": hot_category.category.id,
-                    "name": hot_category.category.name,
-                    "slug": hot_category.category.slug,
-                },
-            }
-        )
+        return Response({
+            "id": hot_category.id,
+            "ordering": hot_category.ordering,
+            "is_active": hot_category.is_active,
+            "image": request.build_absolute_uri(hot_category.image.url),
+            "category": {
+                "id": hot_category.category.id,
+                "name": hot_category.category.name,
+                "slug": hot_category.category.slug,
+            },
+        })
 
     # --------------------------------------------------
     # DELETE — REMOVE HOT CATEGORY

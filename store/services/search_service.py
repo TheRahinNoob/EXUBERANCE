@@ -1,10 +1,12 @@
+from django.db import connection
+from django.db.models import QuerySet, Q
+from django.utils.timezone import now
+
 from django.contrib.postgres.search import (
     SearchVector,
     SearchQuery,
     SearchRank,
 )
-from django.db.models import QuerySet, Q
-from django.utils.timezone import now
 
 from store.models import Product, Category
 
@@ -29,7 +31,6 @@ def _resolve_category_ids(slugs: list[str]) -> set[int]:
 
     current_time = now()
 
-    # Root categories (normal + valid campaign categories)
     roots = (
         Category.objects
         .filter(
@@ -58,7 +59,6 @@ def _resolve_category_ids(slugs: list[str]) -> set[int]:
 
         resolved.add(node.id)
 
-        # Children inherit visibility from parent
         stack.extend(
             node.children.filter(is_active=True).only("id")
         )
@@ -86,37 +86,43 @@ def search_products(
     - Campaign categories are DATE-SAFE
     - UNION filtering (not intersection)
     - Parent categories include descendants
-    - Ranked full-text search
+    - Ranked full-text search (Postgres)
+    - SQLite-safe fallback search (dev)
     - Deterministic ordering (SEO-safe)
     - Pagination-safe
     - No duplicate rows
-
-    FUTURE-READY FOR:
-    - Meta tags & canonical logic
-    - Popularity / CTR ranking
-    - Sales-based sorting
-    - Personalization layers
     """
 
     qs = Product.objects.filter(is_active=True)
 
     # -------------------------------------------------
-    # FULL-TEXT SEARCH (POSTGRES RANKED SEARCH)
+    # FULL-TEXT SEARCH
     # -------------------------------------------------
     if query:
-        vector = (
-            SearchVector("name", weight="A") +
-            SearchVector("short_description", weight="B") +
-            SearchVector("description", weight="C")
-        )
+        query = query.strip()
 
-        search_query = SearchQuery(query)
+        if connection.vendor == "postgresql":
+            # 🔥 Production-grade ranked full-text search
+            vector = (
+                SearchVector("name", weight="A") +
+                SearchVector("short_description", weight="B") +
+                SearchVector("description", weight="C")
+            )
 
-        qs = (
-            qs.annotate(rank=SearchRank(vector, search_query))
-              .filter(rank__gt=0.1)
-              .order_by("-rank", "-created_at")
-        )
+            search_query = SearchQuery(query)
+
+            qs = (
+                qs.annotate(rank=SearchRank(vector, search_query))
+                  .filter(rank__gt=0.1)
+                  .order_by("-rank", "-created_at")
+            )
+        else:
+            # 🧪 SQLite-safe fallback (local dev)
+            qs = qs.filter(
+                Q(name__icontains=query) |
+                Q(short_description__icontains=query) |
+                Q(description__icontains=query)
+            ).order_by("-created_at")
 
     # -------------------------------------------------
     # CATEGORY / CAMPAIGN FILTERING (UNIFIED)

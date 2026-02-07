@@ -1,13 +1,15 @@
 from pathlib import Path
 import os
-import dj_database_url
 from datetime import timedelta
 
+import dj_database_url
+from dotenv import load_dotenv
+
 # ==================================================
-# BASE DIR
+# LOAD ENV (LOCAL + PROD SAFE)
 # ==================================================
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+load_dotenv(BASE_DIR / ".env")  # <-- CRITICAL FIX
 
 # ==================================================
 # SECURITY
@@ -20,7 +22,6 @@ ALLOWED_HOSTS = os.environ.get(
     "ALLOWED_HOSTS",
     "localhost,127.0.0.1,.onrender.com"
 ).split(",")
-
 
 # ==================================================
 # APPLICATIONS
@@ -38,7 +39,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "django_summernote",
-
     # JWT
     "rest_framework_simplejwt",
 
@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     # Local
     "store",
 ]
-
 
 # ==================================================
 # MIDDLEWARE
@@ -63,7 +62,6 @@ MIDDLEWARE = [
 
     # Sessions ONLY for Django admin
     "django.contrib.sessions.middleware.SessionMiddleware",
-
     "django.middleware.common.CommonMiddleware",
 
     # CSRF REQUIRED for Django admin
@@ -74,16 +72,14 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-
 # ==================================================
 # PROXY / HTTPS (RENDER)
 # ==================================================
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
-
 # ==================================================
-# CORS (FRONTEND → BACKEND)
+# CORS
 # ==================================================
 CORS_ALLOW_CREDENTIALS = True
 
@@ -101,14 +97,10 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
 ]
 
-
 # ==================================================
-# CSRF (DJANGO ADMIN ONLY)
+# CSRF (ADMIN ONLY)
 # ==================================================
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:3000",
-    "https://exuberance-frontend-theta.vercel.app",
-]
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
@@ -118,7 +110,6 @@ CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False
-
 
 # ==================================================
 # URLS & TEMPLATES
@@ -143,7 +134,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "backend.wsgi.application"
 
-
 # ==================================================
 # DATABASE
 # ==================================================
@@ -153,7 +143,6 @@ DATABASES = {
         conn_max_age=60,
     )
 }
-
 
 # ==================================================
 # PASSWORD VALIDATION
@@ -165,7 +154,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-
 # ==================================================
 # I18N
 # ==================================================
@@ -173,7 +161,6 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
-
 
 # ==================================================
 # STATIC FILES
@@ -186,29 +173,33 @@ if DEBUG:
 else:
     STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-
 # ==================================================
-# MEDIA — CLOUDINARY (FIXES 404 FOREVER)
+# MEDIA — CLOUDINARY (SAFE FALLBACK)
 # ==================================================
-DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 
-CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": os.environ.get("CLOUDINARY_CLOUD_NAME"),
-    "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
-    "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
-}
-
-MEDIA_URL = "/media/"  # kept for compatibility
-
+if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET:
+    DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": CLOUDINARY_CLOUD_NAME,
+        "API_KEY": CLOUDINARY_API_KEY,
+        "API_SECRET": CLOUDINARY_API_SECRET,
+    }
+else:
+    # 🔥 LOCAL FALLBACK — NEVER CRASH
+    DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+    MEDIA_ROOT = BASE_DIR / "media"
+    MEDIA_URL = "/media/"
 
 # ==================================================
 # DEFAULT PRIMARY KEY
 # ==================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-
 # ==================================================
-# DJANGO REST FRAMEWORK (JWT ONLY)
+# DRF
 # ==================================================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -219,9 +210,8 @@ REST_FRAMEWORK = {
     ],
 }
 
-
 # ==================================================
-# SIMPLE JWT CONFIG
+# SIMPLE JWT
 # ==================================================
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
@@ -230,7 +220,6 @@ SIMPLE_JWT = {
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
-
 
 # ==================================================
 # LOGGING

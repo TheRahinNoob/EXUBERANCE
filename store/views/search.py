@@ -25,23 +25,26 @@ class ProductSearchAPIView(APIView):
 
     def get(self, request):
         # ==================================================
-        # QUERY PARAM PARSING (STRICT, DEFENSIVE, BORING)
+        # QUERY PARAM PARSING (STRICT, DEFENSIVE)
         # ==================================================
 
         # ---- Full-text search ----
         query = request.GET.get("q")
-        query = query.strip() if query else None
+        query = query.strip() if isinstance(query, str) and query.strip() else None
 
         # ---- Legacy support (DO NOT REMOVE) ----
-        # Allows old URLs like ?category=t-shirt
         category_slug = request.GET.get("category")
-        category_slug = category_slug.strip() if category_slug else None
+        category_slug = (
+            category_slug.strip()
+            if isinstance(category_slug, str) and category_slug.strip()
+            else None
+        )
 
         # ---- Categories (NORMAL + CAMPAIGN) ----
         categories_param = request.GET.get("categories")
-        categories: list[str] | None = None
+        categories = None
 
-        if categories_param:
+        if isinstance(categories_param, str):
             categories = [
                 slug.strip()
                 for slug in categories_param.split(",")
@@ -63,6 +66,11 @@ class ProductSearchAPIView(APIView):
         except (TypeError, ValueError):
             raise ValidationError({
                 "price": "min_price and max_price must be valid integers."
+            })
+
+        if min_price is not None and max_price is not None and min_price > max_price:
+            raise ValidationError({
+                "price": "min_price cannot be greater than max_price."
             })
 
         # ==================================================
