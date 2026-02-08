@@ -86,6 +86,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://exuberance-frontend-theta.vercel.app",
+    "https://www.exuberancebd.com",
 ]
 
 CORS_ALLOW_HEADERS = [
