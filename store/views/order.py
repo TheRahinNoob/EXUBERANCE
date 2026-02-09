@@ -12,6 +12,7 @@ from store.serializers import (
     OrderCreateSerializer,
     OrderTrackingSerializer,
 )
+from store.services.order_service import confirm_order  # ✅ ensure confirm_order is imported
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +37,20 @@ class CreateOrderAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             order = serializer.save()
 
+            # ✅ Confirm the order (fires Meta Purchase event safely)
+            confirm_order(
+                order=order,
+                actor_type="system",
+                actor_identifier="checkout",
+            )
+
         except ValidationError as e:
-            # Client-side error (bad input)
             return Response(
                 {"errors": e.detail},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        except DatabaseError as e:
-            # Database-level failure (deadlock, constraint, etc.)
+        except DatabaseError:
             logger.error(
                 "Database error while creating order",
                 exc_info=True,
@@ -59,16 +65,12 @@ class CreateOrderAPIView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        except Exception as e:
-            # 🔥 CRITICAL FIX: DO NOT SWALLOW TRACEBACK
+        except Exception:
             logger.critical(
                 "Unhandled exception during order creation",
                 exc_info=True,
             )
-
-            # Also print traceback explicitly (dev-safe)
             traceback.print_exc()
-
             return Response(
                 {
                     "detail": (
@@ -85,6 +87,7 @@ class CreateOrderAPIView(APIView):
             {
                 "reference": order.reference,
                 "status": order.status,
+                "total_price": order.total_price,  # ✅ include total_price for frontend & Meta Pixel
                 "created_at": order.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,

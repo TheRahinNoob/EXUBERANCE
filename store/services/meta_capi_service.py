@@ -27,6 +27,9 @@ def _sha256(value: Optional[str]) -> Optional[str]:
 
 
 def _get_meta_endpoint() -> str:
+    """
+    Returns the Meta Conversions API endpoint URL.
+    """
     return f"https://graph.facebook.com/v18.0/{settings.META_PIXEL_ID}/events"
 
 
@@ -44,7 +47,7 @@ def send_meta_purchase_event(order: Order) -> None:
     """
 
     # -----------------------------
-    # SAFETY CHECKS (DEFENSIVE)
+    # SAFETY CHECKS
     # -----------------------------
     if order.status != Order.STATUS_CONFIRMED:
         logger.warning(
@@ -62,9 +65,11 @@ def send_meta_purchase_event(order: Order) -> None:
         return
 
     # -----------------------------
-    # BUILD USER DATA (MATCH QUALITY)
+    # BUILD USER DATA
     # -----------------------------
     user_data = {
+        "fn": _sha256(getattr(order, "name", "").split(" ")[0] if order.name else None),
+        "ln": _sha256(" ".join(getattr(order, "name", "").split(" ")[1:]) if order.name else None),
         "ph": _sha256(order.phone),
     }
 
@@ -79,7 +84,7 @@ def send_meta_purchase_event(order: Order) -> None:
 
     for item in order.items.all():
         contents.append({
-            "id": str(item.variant_id),
+            "id": str(item.variant.id),
             "quantity": item.quantity,
             "item_price": float(item.price),
         })
@@ -93,7 +98,7 @@ def send_meta_purchase_event(order: Order) -> None:
             {
                 "event_name": "Purchase",
                 "event_time": int(time.time()),
-                "event_id": order.reference,  # 🔥 DEDUP KEY
+                "event_id": order.reference,  # 🔑 Dedup key
                 "action_source": "website",
                 "user_data": user_data,
                 "custom_data": {
@@ -114,24 +119,18 @@ def send_meta_purchase_event(order: Order) -> None:
         response = requests.post(
             _get_meta_endpoint(),
             json=payload,
-            timeout=3,
+            timeout=5,
         )
 
         if response.status_code >= 400:
             logger.error(
-                "Meta CAPI error (%s): %s",
+                "Meta CAPI error (%s) for order %s: %s",
                 response.status_code,
+                order.reference,
                 response.text,
             )
         else:
-            logger.info(
-                "Meta Purchase sent for order %s",
-                order.reference,
-            )
+            logger.info("Meta Purchase sent for order %s", order.reference)
 
     except requests.RequestException:
-        # 🔒 NEVER break order confirmation
-        logger.exception(
-            "Meta CAPI request failed for order %s",
-            order.reference,
-        )
+        logger.exception("Meta CAPI request failed for order %s", order.reference)

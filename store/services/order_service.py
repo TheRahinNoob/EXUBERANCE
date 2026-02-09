@@ -6,14 +6,10 @@ from store.models import (
     OrderItem,
     ProductVariant,
 )
-from store.services.order_audit_service import (
-    log_order_status_change,
-)
+from store.services.order_audit_service import log_order_status_change
 
-# ✅ NEW: Meta Conversions API (isolated side effect)
-from store.services.meta_capi_service import (
-    send_meta_purchase_event,
-)
+# ✅ Meta Conversions API (isolated side effect)
+from store.services.meta_capi_service import send_meta_purchase_event
 
 
 # ==================================================
@@ -39,9 +35,7 @@ def create_order(
     """
 
     if not items:
-        raise ValidationError({
-            "items": "Order must contain at least one item."
-        })
+        raise ValidationError({"items": "Order must contain at least one item."})
 
     # -----------------------------
     # 1. NORMALIZE & VALIDATE INPUT
@@ -53,19 +47,12 @@ def create_order(
             variant_id = int(item["variant_id"])
             quantity = int(item["quantity"])
         except (KeyError, TypeError, ValueError):
-            raise ValidationError({
-                "items": "Invalid item format."
-            })
+            raise ValidationError({"items": "Invalid item format."})
 
         if quantity <= 0:
-            raise ValidationError({
-                "quantity": "Quantity must be greater than zero."
-            })
+            raise ValidationError({"quantity": "Quantity must be greater than zero."})
 
-        normalized_items.append({
-            "variant_id": variant_id,
-            "quantity": quantity,
-        })
+        normalized_items.append({"variant_id": variant_id, "quantity": quantity})
 
     # -----------------------------
     # 2. LOCK PRODUCT VARIANTS
@@ -73,39 +60,29 @@ def create_order(
     variant_ids = [i["variant_id"] for i in normalized_items]
 
     variants = (
-        ProductVariant.objects
-        .select_for_update()
+        ProductVariant.objects.select_for_update()
         .select_related("product")
         .filter(id__in=variant_ids)
     )
 
     if variants.count() != len(variant_ids):
-        raise ValidationError({
-            "items": "One or more product variants do not exist."
-        })
+        raise ValidationError({"items": "One or more product variants do not exist."})
 
     variant_map = {v.id: v for v in variants}
 
     for item in normalized_items:
         variant = variant_map[item["variant_id"]]
         if variant.stock < item["quantity"]:
-            raise ValidationError({
-                "stock": (
-                    f"{variant.product.name} "
-                    f"({variant.size}/{variant.color}) "
-                    "has insufficient stock."
-                )
-            })
+            raise ValidationError(
+                {
+                    "stock": f"{variant.product.name} ({variant.size}/{variant.color}) has insufficient stock."
+                }
+            )
 
     # -----------------------------
     # 3. CREATE ORDER (PENDING)
     # -----------------------------
-    order = Order.objects.create(
-        name=name,
-        phone=phone,
-        address=address,
-        total_price=0,
-    )
+    order = Order.objects.create(name=name, phone=phone, address=address, total_price=0)
 
     total_price = 0
 
@@ -224,6 +201,7 @@ def confirm_order(
 
     if transitioned:
         # 🔥 SIDE EFFECT (SAFE, POST-COMMIT INTENT)
+        # Ensure order.total_price is passed correctly
         send_meta_purchase_event(order)
 
     return transitioned
@@ -274,8 +252,7 @@ def cancel_order(
     actor_identifier: str,
 ) -> bool:
     order = (
-        Order.objects
-        .select_for_update()
+        Order.objects.select_for_update()
         .prefetch_related("items__variant")
         .get(pk=order.pk)
     )
