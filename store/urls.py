@@ -46,6 +46,7 @@ from store.views.search import ProductSearchAPIView
 from store.views.order import (
     CreateOrderAPIView,
     OrderTrackingAPIView,
+    PublicOrderByReferenceAPIView,  # ✅ ADDED
 )
 
 # ==================================================
@@ -59,7 +60,7 @@ app_name = "store"
 urlpatterns = [
 
     # ==================================================
-    # LANDING PAGE — CMS STRUCTURE (ORDER ONLY)
+    # LANDING PAGE — CMS STRUCTURE
     # ==================================================
     path(
         "landing/cms/",
@@ -160,5 +161,14 @@ urlpatterns = [
         "orders/track/",
         OrderTrackingAPIView.as_view(),
         name="order-track",
+    ),
+
+    # ==================================================
+    # ORDERS — PUBLIC (ANALYTICS / META PIXEL)
+    # ==================================================
+    path(
+        "orders/public/by-ref/<str:reference>/",
+        PublicOrderByReferenceAPIView.as_view(),
+        name="order-public-by-ref",
     ),
 ]

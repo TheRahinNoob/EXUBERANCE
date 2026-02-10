@@ -12,7 +12,7 @@ from store.serializers import (
     OrderCreateSerializer,
     OrderTrackingSerializer,
 )
-from store.services.order_service import confirm_order  # ✅ ensure confirm_order is imported
+from store.services.order_service import confirm_order
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ class CreateOrderAPIView(APIView):
 
     Responsibilities:
     - Validate input via serializer
-    - Persist order atomically (handled by serializer/service)
-    - Return safe, user-facing responses
-    - NEVER swallow unexpected exceptions silently
+    - Persist order atomically
+    - Confirm order
+    - Return safe, user-facing response
     """
 
     def post(self, request):
@@ -37,7 +37,7 @@ class CreateOrderAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             order = serializer.save()
 
-            # ✅ Confirm the order (fires Meta Purchase event safely)
+            # ✅ Confirm order (business logic hook)
             confirm_order(
                 order=order,
                 actor_type="system",
@@ -87,7 +87,7 @@ class CreateOrderAPIView(APIView):
             {
                 "reference": order.reference,
                 "status": order.status,
-                "total_price": order.total_price,  # ✅ include total_price for frontend & Meta Pixel
+                "total_price": float(order.total_price),
                 "created_at": order.created_at.isoformat(),
             },
             status=status.HTTP_201_CREATED,
@@ -95,11 +95,12 @@ class CreateOrderAPIView(APIView):
 
 
 # ==================================================
-# TRACK ORDER (PUBLIC)
+# TRACK ORDER (PUBLIC — PHONE VERIFIED)
 # ==================================================
 class OrderTrackingAPIView(APIView):
     """
     Public order tracking endpoint.
+    Requires reference + phone number.
     """
 
     def get(self, request):
@@ -130,5 +131,41 @@ class OrderTrackingAPIView(APIView):
         serializer = OrderTrackingSerializer(order)
         return Response(
             serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+
+# ==================================================
+# PUBLIC ORDER LOOKUP (ANALYTICS / META PIXEL)
+# ==================================================
+class PublicOrderByReferenceAPIView(APIView):
+    """
+    Public read-only order lookup.
+
+    Purpose:
+    - Analytics
+    - Meta Pixel Purchase event
+    - No PII
+    - No authentication
+    """
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, reference):
+        try:
+            order = Order.objects.get(reference=reference)
+        except Order.DoesNotExist:
+            return Response(
+                {"detail": "Order not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "reference": order.reference,
+                "total": float(order.total_price),
+                "currency": "BDT",
+            },
             status=status.HTTP_200_OK,
         )
