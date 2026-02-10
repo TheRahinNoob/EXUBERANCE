@@ -20,7 +20,23 @@ class Order(models.Model):
     """
 
     # ==================================================
-    # STATUS CONSTANTS (SINGLE SOURCE OF TRUTH)
+    # DELIVERY CONFIGURATION (SINGLE SOURCE OF TRUTH)
+    # ==================================================
+    DELIVERY_INSIDE_DHAKA = "inside_dhaka"
+    DELIVERY_OUTSIDE_DHAKA = "outside_dhaka"
+
+    DELIVERY_AREA_CHOICES = (
+        (DELIVERY_INSIDE_DHAKA, "Inside Dhaka"),
+        (DELIVERY_OUTSIDE_DHAKA, "Outside Dhaka"),
+    )
+
+    DELIVERY_CHARGE_MAP = {
+        DELIVERY_INSIDE_DHAKA: Decimal("80.00"),
+        DELIVERY_OUTSIDE_DHAKA: Decimal("150.00"),
+    }
+
+    # ==================================================
+    # STATUS CONSTANTS
     # ==================================================
     STATUS_PENDING = "pending"
     STATUS_CONFIRMED = "confirmed"
@@ -37,7 +53,7 @@ class Order(models.Model):
     )
 
     # ==================================================
-    # STATE MACHINE DEFINITION
+    # STATE MACHINE
     # ==================================================
     ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
         STATUS_PENDING: {STATUS_CONFIRMED, STATUS_CANCELLED},
@@ -60,15 +76,19 @@ class Order(models.Model):
         unique=True,
         editable=False,
         db_index=True,
-        help_text="Human-friendly order reference",
     )
 
     # ==================================================
-    # CUSTOMER SNAPSHOT (ACCOUNT-AGNOSTIC)
+    # CUSTOMER SNAPSHOT
     # ==================================================
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=20)
     address = models.TextField()
+    city = models.CharField(max_length=120)  # ✅ Added city field
+    delivery_area = models.CharField(
+        max_length=20,
+        choices=DELIVERY_AREA_CHOICES,
+    )
 
     # ==================================================
     # FINANCIALS
@@ -77,11 +97,17 @@ class Order(models.Model):
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Final payable amount",
+        help_text="Final payable amount (items subtotal + delivery charge)",
+    )
+
+    delivery_charge = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
     )
 
     # ==================================================
-    # STATUS / LIFECYCLE
+    # STATUS
     # ==================================================
     status = models.CharField(
         max_length=20,
@@ -108,110 +134,70 @@ class Order(models.Model):
         ]
 
     # ==================================================
-    # SAVE OVERRIDE (REFERENCE GENERATION)
+    # SAVE OVERRIDE
     # ==================================================
     def save(self, *args, **kwargs):
         if not self.reference:
             self.reference = self._generate_reference()
+
+        # Ensure total_price integrity
+        if self.pk:  # only recalc on updates
+            self.total_price = self.subtotal + self.delivery_charge
+
         super().save(*args, **kwargs)
 
     @staticmethod
     def _generate_reference() -> str:
-        """
-        Generates a unique, human-friendly order reference.
-        Collision-safe.
-        """
         while True:
             ref = f"ORD-{get_random_string(10).upper()}"
             if not Order.objects.filter(reference=ref).exists():
                 return ref
 
     # ==================================================
-    # STATE MACHINE CORE
+    # COMPUTED HELPERS
+    # ==================================================
+    @property
+    def subtotal(self) -> Decimal:
+        """
+        Sum of all order items.
+        """
+        return sum(
+            (item.line_total for item in self.items.all()),
+            Decimal("0.00"),
+        )
+
+    # ==================================================
+    # STATE MACHINE
     # ==================================================
     def can_transition_to(self, new_status: str) -> bool:
-        """
-        Checks whether a transition is allowed from current status.
-        """
         return new_status in self.ALLOWED_TRANSITIONS.get(
             self.status, set()
         )
 
-    def transition_error(self, new_status: str) -> str:
-        return (
-            f"Order cannot transition from "
-            f"'{self.status}' to '{new_status}'."
-        )
-
     def transition_to(self, new_status: str) -> None:
-        """
-        Performs a validated state transition.
-
-        IMPORTANT:
-        - This method ONLY mutates state
-        - Side effects (stock, audit, payments)
-          MUST live in service layer
-        """
         if not self.can_transition_to(new_status):
             raise ValidationError({
-                "status": self.transition_error(new_status)
+                "status": (
+                    f"Order cannot transition from "
+                    f"'{self.status}' to '{new_status}'."
+                )
             })
 
         self.status = new_status
         self.save(update_fields=["status", "updated_at"])
 
-    # ==================================================
-    # SEMANTIC HELPERS (USED EVERYWHERE)
-    # ==================================================
-    def can_confirm(self) -> bool:
-        return self.can_transition_to(self.STATUS_CONFIRMED)
-
-    def can_ship(self) -> bool:
-        return self.can_transition_to(self.STATUS_SHIPPED)
-
-    def can_deliver(self) -> bool:
-        return self.can_transition_to(self.STATUS_DELIVERED)
-
-    def can_cancel(self) -> bool:
-        return self.can_transition_to(self.STATUS_CANCELLED)
-
     @property
     def is_terminal(self) -> bool:
-        """
-        Whether the order is in a terminal state.
-        """
         return self.status in self.TERMINAL_STATES
 
-    # ==================================================
-    # DISPLAY / API HELPERS
-    # ==================================================
-    @property
-    def customer_name(self) -> str:
-        return self.name
-
-    @property
-    def customer_phone(self) -> str:
-        return self.phone
-
-    # ==================================================
-    # STRING REPRESENTATION
-    # ==================================================
     def __str__(self) -> str:
         return f"{self.reference} ({self.status})"
 
 
 # ======================================================
-# ORDER ITEM (IMMUTABLE SNAPSHOT)
+# ORDER ITEM
 # ======================================================
 class OrderItem(models.Model):
-    """
-    Immutable snapshot of a purchased item.
-
-    DESIGN:
-    - Product / variant may change later
-    - Snapshot preserves historical accuracy
-    """
-
     order = models.ForeignKey(
         Order,
         related_name="items",
@@ -228,9 +214,6 @@ class OrderItem(models.Model):
         on_delete=models.PROTECT,
     )
 
-    # ------------------------------
-    # SNAPSHOT FIELDS
-    # ------------------------------
     product_name = models.CharField(max_length=255)
     size = models.CharField(max_length=50)
     color = models.CharField(max_length=50)
@@ -245,9 +228,6 @@ class OrderItem(models.Model):
     class Meta:
         ordering = ("id",)
 
-    # ------------------------------
-    # COMPUTED
-    # ------------------------------
     @property
     def line_total(self) -> Decimal:
         return self.price * self.quantity

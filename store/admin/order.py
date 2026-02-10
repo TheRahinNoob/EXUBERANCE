@@ -38,7 +38,7 @@ class OrderItemInline(admin.TabularInline):
 
 
 # ==================================================
-# ORDER STATUS AUDIT INLINE (READ-ONLY, FIXED)
+# ORDER STATUS AUDIT INLINE (READ-ONLY)
 # ==================================================
 class OrderStatusAuditInline(admin.TabularInline):
     model = OrderStatusAuditLog
@@ -71,6 +71,7 @@ class OrderAdmin(admin.ModelAdmin):
         "reference",
         "name",
         "phone",
+        "city",           # ✅ Added city
         "status_badge",
         "total_price",
         "created_at",
@@ -85,6 +86,7 @@ class OrderAdmin(admin.ModelAdmin):
         "reference",
         "name",
         "phone",
+        "city",           # ✅ Searchable by city
     )
 
     ordering = ("-created_at",)
@@ -97,6 +99,7 @@ class OrderAdmin(admin.ModelAdmin):
         "name",
         "phone",
         "address",
+        "city",           # ✅ Added city
         "status",
         "total_price",
         "created_at",

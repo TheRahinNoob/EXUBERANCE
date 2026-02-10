@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
@@ -13,6 +14,15 @@ from store.services.meta_capi_service import send_meta_purchase_event
 
 
 # ==================================================
+# DELIVERY CHARGE RULES (SINGLE SOURCE OF TRUTH)
+# ==================================================
+DELIVERY_CHARGE_MAP = {
+    Order.DELIVERY_INSIDE_DHAKA: Decimal("80.00"),
+    Order.DELIVERY_OUTSIDE_DHAKA: Decimal("150.00"),
+}
+
+
+# ==================================================
 # CREATE ORDER (CANONICAL ENTRY POINT)
 # ==================================================
 @transaction.atomic
@@ -21,6 +31,8 @@ def create_order(
     name: str,
     phone: str,
     address: str,
+    city: str,
+    delivery_area: str,
     items: list[dict],
 ) -> Order:
     """
@@ -31,11 +43,18 @@ def create_order(
     - Row-level locking on stock
     - Atomic behavior
     - Immutable order item snapshot
+    - Delivery charge auto-calculated
     - Audit-safe
     """
 
     if not items:
         raise ValidationError({"items": "Order must contain at least one item."})
+
+    # Validate delivery area
+    if delivery_area not in DELIVERY_CHARGE_MAP:
+        raise ValidationError({"delivery_area": "Invalid delivery area."})
+
+    delivery_charge = DELIVERY_CHARGE_MAP[delivery_area]
 
     # -----------------------------
     # 1. NORMALIZE & VALIDATE INPUT
@@ -82,9 +101,17 @@ def create_order(
     # -----------------------------
     # 3. CREATE ORDER (PENDING)
     # -----------------------------
-    order = Order.objects.create(name=name, phone=phone, address=address, total_price=0)
+    order = Order.objects.create(
+        name=name,
+        phone=phone,
+        address=address,
+        city=city,
+        delivery_area=delivery_area,
+        delivery_charge=delivery_charge,
+        total_price=Decimal("0.00"),
+    )
 
-    total_price = 0
+    items_total = Decimal("0.00")
 
     # -----------------------------
     # 4. SNAPSHOT ITEMS + DEDUCT STOCK
@@ -99,7 +126,7 @@ def create_order(
 
         price = variant.product.price
         line_total = price * quantity
-        total_price += line_total
+        items_total += line_total
 
         OrderItem.objects.create(
             order=order,
@@ -112,11 +139,16 @@ def create_order(
             quantity=quantity,
         )
 
-    order.total_price = total_price
+    # -----------------------------
+    # 5. FINAL TOTAL CALCULATION
+    # -----------------------------
+    final_total = items_total + delivery_charge
+
+    order.total_price = final_total
     order.save(update_fields=["total_price"])
 
     # -----------------------------
-    # 5. INITIAL AUDIT LOG
+    # 6. INITIAL AUDIT LOG
     # -----------------------------
     log_order_status_change(
         order=order,
@@ -140,15 +172,6 @@ def _transition_order(
     actor_type: str,
     actor_identifier: str,
 ) -> bool:
-    """
-    Single authoritative transition handler.
-
-    Responsibilities:
-    - Row-level lock
-    - Transition validation
-    - State persistence
-    - Audit logging
-    """
 
     order = Order.objects.select_for_update().get(pk=order.pk)
     from_status = order.status
@@ -178,19 +201,6 @@ def confirm_order(
     actor_type: str,
     actor_identifier: str,
 ) -> bool:
-    """
-    Confirms an order.
-
-    This is the ONLY place where:
-    - Payment is considered successful
-    - Purchase becomes real
-    - Meta Purchase event is fired
-
-    Guaranteed:
-    - Fires once
-    - Never fires on retries
-    - Never fires on invalid transitions
-    """
 
     transitioned = _transition_order(
         order=order,
@@ -200,8 +210,6 @@ def confirm_order(
     )
 
     if transitioned:
-        # 🔥 SIDE EFFECT (SAFE, POST-COMMIT INTENT)
-        # Ensure order.total_price is passed correctly
         send_meta_purchase_event(order)
 
     return transitioned
@@ -251,6 +259,7 @@ def cancel_order(
     actor_type: str,
     actor_identifier: str,
 ) -> bool:
+
     order = (
         Order.objects.select_for_update()
         .prefetch_related("items__variant")

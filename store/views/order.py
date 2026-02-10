@@ -8,13 +8,11 @@ import traceback
 import logging
 
 from store.models import Order
-from store.serializers import (
-    OrderCreateSerializer,
-    OrderTrackingSerializer,
-)
+from store.serializers import OrderCreateSerializer, OrderTrackingSerializer
 from store.services.order_service import confirm_order
 
 logger = logging.getLogger(__name__)
+
 
 # ==================================================
 # CREATE ORDER (CHECKOUT)
@@ -27,7 +25,7 @@ class CreateOrderAPIView(APIView):
     - Validate input via serializer
     - Persist order atomically
     - Confirm order
-    - Return safe, user-facing response
+    - Return safe, user-facing response including delivery_charge, subtotal, city
     """
 
     def post(self, request):
@@ -37,7 +35,7 @@ class CreateOrderAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             order = serializer.save()
 
-            # ✅ Confirm order (business logic hook)
+            # ✅ Confirm order automatically
             confirm_order(
                 order=order,
                 actor_type="system",
@@ -51,45 +49,26 @@ class CreateOrderAPIView(APIView):
             )
 
         except DatabaseError:
-            logger.error(
-                "Database error while creating order",
-                exc_info=True,
-            )
+            logger.error("Database error while creating order", exc_info=True)
             return Response(
-                {
-                    "detail": (
-                        "Unable to process your order right now. "
-                        "Please try again later."
-                    )
-                },
+                {"detail": "Unable to process your order right now. Please try again later."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         except Exception:
-            logger.critical(
-                "Unhandled exception during order creation",
-                exc_info=True,
-            )
+            logger.critical("Unhandled exception during order creation", exc_info=True)
             traceback.print_exc()
             return Response(
-                {
-                    "detail": (
-                        "Unexpected error occurred while placing order."
-                    )
-                },
+                {"detail": "Unexpected error occurred while placing order."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         # -----------------------------
-        # SUCCESS
+        # SUCCESS — serialize full order details
         # -----------------------------
+        tracking_serializer = OrderTrackingSerializer(order)
         return Response(
-            {
-                "reference": order.reference,
-                "status": order.status,
-                "total_price": float(order.total_price),
-                "created_at": order.created_at.isoformat(),
-            },
+            tracking_serializer.data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -109,30 +88,17 @@ class OrderTrackingAPIView(APIView):
 
         if not reference or not phone:
             return Response(
-                {
-                    "detail": (
-                        "Order reference and phone number are required."
-                    )
-                },
+                {"detail": "Order reference and phone number are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            order = (
-                Order.objects
-                .prefetch_related("items")
-                .get(reference=reference, phone=phone)
-            )
+            order = Order.objects.prefetch_related("items").get(reference=reference, phone=phone)
         except Order.DoesNotExist:
-            raise NotFound(
-                "No order found with the provided reference and phone."
-            )
+            raise NotFound("No order found with the provided reference and phone.")
 
         serializer = OrderTrackingSerializer(order)
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK,
-        )
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 # ==================================================
@@ -141,7 +107,6 @@ class OrderTrackingAPIView(APIView):
 class PublicOrderByReferenceAPIView(APIView):
     """
     Public read-only order lookup.
-
     Purpose:
     - Analytics
     - Meta Pixel Purchase event
@@ -156,15 +121,14 @@ class PublicOrderByReferenceAPIView(APIView):
         try:
             order = Order.objects.get(reference=reference)
         except Order.DoesNotExist:
-            return Response(
-                {"detail": "Order not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            return Response({"detail": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response(
             {
                 "reference": order.reference,
-                "total": float(order.total_price),
+                "subtotal": float(order.subtotal),
+                "delivery_charge": float(order.delivery_charge),
+                "total_price": float(order.total_price),
                 "currency": "BDT",
             },
             status=status.HTTP_200_OK,

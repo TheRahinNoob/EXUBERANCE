@@ -24,8 +24,17 @@ class OrderCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=200)
     phone = serializers.CharField(max_length=20)
     address = serializers.CharField()
+    city = serializers.CharField(max_length=120)  # ✅ Added city
+
+    delivery_area = serializers.ChoiceField(
+        choices=Order.DELIVERY_AREA_CHOICES
+    )
+
     items = OrderItemInputSerializer(many=True)
 
+    # ----------------------------------------------
+    # VALIDATION
+    # ----------------------------------------------
     def validate(self, data):
         items = data.get("items")
 
@@ -53,11 +62,16 @@ class OrderCreateSerializer(serializers.Serializer):
 
         return data
 
+    # ----------------------------------------------
+    # CREATE ORDER (SERVICE LAYER)
+    # ----------------------------------------------
     def create(self, validated_data):
         return create_order(
             name=validated_data["name"],
             phone=validated_data["phone"],
             address=validated_data["address"],
+            city=validated_data["city"],  # ✅ Now included
+            delivery_area=validated_data["delivery_area"],
             items=validated_data["items"],
         )
 
@@ -94,18 +108,40 @@ class OrderStatusLogSerializer(serializers.ModelSerializer):
 
 class OrderTrackingSerializer(serializers.ModelSerializer):
     items = OrderItemTrackingSerializer(many=True, read_only=True)
+
     status_history = OrderStatusLogSerializer(
         many=True,
         source="status_logs",
         read_only=True,
     )
+
     created_at = serializers.SerializerMethodField()
+
+    subtotal = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    delivery_charge = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+
+    total_price = serializers.SerializerMethodField()
+    
+    city = serializers.CharField(read_only=True)  # ✅ Optional: expose city in tracking
 
     class Meta:
         model = Order
         fields = (
             "reference",
             "status",
+            "delivery_area",
+            "city",  # ✅ include city
+            "subtotal",
+            "delivery_charge",
             "total_price",
             "created_at",
             "items",
@@ -114,3 +150,6 @@ class OrderTrackingSerializer(serializers.ModelSerializer):
 
     def get_created_at(self, obj):
         return localtime(obj.created_at).isoformat()
+
+    def get_total_price(self, obj):
+        return str(obj.total_price)
