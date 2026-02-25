@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from django.urls import path
 
 # ==================================================
@@ -31,6 +33,7 @@ from store.views.admin.product_images import (
 
 from store.views.admin.product_variants import (
     AdminProductVariantListCreateView,
+    AdminProductVariantBulkCreateView,
     AdminProductVariantDetailView,
 )
 
@@ -118,7 +121,6 @@ app_name = "admin_api"
 # URLPATTERNS — JWT-PROTECTED ADMIN API
 # ==================================================
 urlpatterns = [
-
     # ---------------- ORDERS ----------------
     path("orders/", AdminOrderListView.as_view()),
     path("orders/<int:pk>/", AdminOrderDetailView.as_view()),
@@ -132,13 +134,21 @@ urlpatterns = [
     path("products/<int:pk>/deactivate/", AdminProductDeactivateView.as_view()),
     path("products/<int:pk>/images/", AdminProductImageListCreateView.as_view()),
     path("product-images/<int:image_id>/", AdminProductImageDetailView.as_view()),
+
+    # ---------------- VARIANTS ----------------
+    # Keep specific routes BEFORE generic product detail route.
     path("products/<int:pk>/variants/", AdminProductVariantListCreateView.as_view()),
+    path("products/<int:pk>/variants/bulk/", AdminProductVariantBulkCreateView.as_view()),
     path("product-variants/<int:variant_id>/", AdminProductVariantDetailView.as_view()),
+
+    # ---------------- ATTRIBUTES ----------------
     path("products/<int:pk>/attributes/", AdminProductAttributeListView.as_view()),
     path("products/<int:pk>/attributes/reorder/", AdminProductAttributeReorderView.as_view()),
     path("product-attributes/<int:pav_id>/", AdminProductAttributeDetailView.as_view()),
     path("attribute-definitions/", AdminProductAttributeDefinitionListView.as_view()),
     path("attribute-definitions/<int:pk>/", AdminProductAttributeDefinitionDetailView.as_view()),
+
+    # Product detail (keep after subroutes)
     path("products/<int:pk>/", AdminProductDetailView.as_view()),
 
     # ---------------- CATEGORIES ----------------

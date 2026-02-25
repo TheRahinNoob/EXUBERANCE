@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 
@@ -13,6 +17,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from store.models import Product, ProductVariant
 from store.services.product_variant_service import (
     create_product_variant,
+    bulk_create_product_variants,
     update_product_variant_stock,
     delete_product_variant,
 )
@@ -36,7 +41,27 @@ class AdminJWTAPIView(APIView):
 
 
 # ==================================================
-# ADMIN PRODUCT VARIANT LIST + CREATE
+# RESPONSE SHAPE HELPERS (STRICT, STABLE CONTRACT)
+# ==================================================
+
+def _variant_to_dict(v: ProductVariant) -> Dict[str, Any]:
+    return {
+        "id": v.id,
+        "size": v.size,
+        "color": v.color,
+        "stock": int(v.stock),
+    }
+
+
+def _coerce_int(value: Any, field: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({field: f"{field.replace('_', ' ').title()} must be an integer."})
+
+
+# ==================================================
+# ADMIN PRODUCT VARIANT LIST + CREATE (SINGLE)
 # ==================================================
 #
 # Endpoints:
@@ -45,66 +70,99 @@ class AdminJWTAPIView(APIView):
 # ==================================================
 
 class AdminProductVariantListCreateView(AdminJWTAPIView):
+    """
+    List variants for a product, and create a single variant.
+    """
 
-    # -----------------------------
-    # LIST VARIANTS
-    # -----------------------------
     def get(self, request, pk: int):
         product = get_object_or_404(Product, pk=pk)
 
         variants = (
-            product.variants
-            .all()
-            .order_by("size", "color", "id")  # deterministic
+            product.variants.all()
+            .order_by("color", "size", "id")  # stable UX: group by color first
         )
 
         return Response(
-            {
-                "items": [
-                    {
-                        "id": v.id,
-                        "size": v.size,
-                        "color": v.color,
-                        "stock": v.stock,
-                    }
-                    for v in variants
-                ]
-            },
+            {"items": [_variant_to_dict(v) for v in variants]},
             status=status.HTTP_200_OK,
         )
 
-    # -----------------------------
-    # CREATE VARIANT
-    # -----------------------------
     @transaction.atomic
     def post(self, request, pk: int):
         product = get_object_or_404(Product, pk=pk)
         data = request.data or {}
 
+        # Minimal input sanity before hitting service
+        size = data.get("size")
+        color = data.get("color")
+        stock = data.get("stock", 0)
+
         try:
             variant = create_product_variant(
                 product=product,
-                size=(data.get("size") or "").strip(),
-                color=(data.get("color") or "").strip(),
-                stock=data.get("stock", 0),
+                size=size,
+                color=color,
+                stock=stock,
             )
         except ValidationError:
             raise
         except Exception:
-            # Never leak internal errors to admin UI
-            raise ValidationError({
-                "message": "Failed to create product variant."
-            })
+            # Don’t leak internals to admin UI
+            raise ValidationError({"detail": "Failed to create product variant."})
 
         return Response(
-            {
-                "id": variant.id,
-                "size": variant.size,
-                "color": variant.color,
-                "stock": variant.stock,
-            },
+            _variant_to_dict(variant),
             status=status.HTTP_201_CREATED,
         )
+
+
+# ==================================================
+# ADMIN PRODUCT VARIANT BULK CREATE ✅
+# ==================================================
+#
+# Endpoint:
+# POST /api/admin/products/<pk>/variants/bulk/
+#
+# Body:
+# {
+#   "color": "Blue",
+#   "sizes": ["38", "40", "42"],  // or any iterable list from frontend
+#   "default_stock": 0
+# }
+# ==================================================
+
+class AdminProductVariantBulkCreateView(AdminJWTAPIView):
+    """
+    Bulk create variants for ONE product + ONE color + MANY sizes.
+    Idempotent: existing ones are skipped, not errors.
+    """
+
+    @transaction.atomic
+    def post(self, request, pk: int):
+        product = get_object_or_404(Product, pk=pk)
+        data = request.data or {}
+
+        # Accept both "default_stock" and "stock" as alias (frontend flexibility)
+        default_stock = (
+            data.get("default_stock")
+            if "default_stock" in data
+            else data.get("stock", 0)
+        )
+
+        try:
+            result = bulk_create_product_variants(
+                product=product,
+                color=data.get("color"),
+                sizes=data.get("sizes"),
+                default_stock=default_stock,
+            )
+        except ValidationError:
+            raise
+        except Exception:
+            raise ValidationError({"detail": "Failed to bulk create product variants."})
+
+        # 201: created something (maybe 0 created but request accepted)
+        return Response(result, status=status.HTTP_201_CREATED)
 
 
 # ==================================================
@@ -117,38 +175,40 @@ class AdminProductVariantListCreateView(AdminJWTAPIView):
 # ==================================================
 
 class AdminProductVariantDetailView(AdminJWTAPIView):
+    """
+    Update stock or delete a variant.
 
-    # -----------------------------
-    # UPDATE STOCK ONLY
-    # -----------------------------
+    NOTE:
+    - delete_product_variant() already converts ProtectedError -> ValidationError(detail=...)
+      in the service, so we only catch ValidationError here.
+    """
+
     @transaction.atomic
     def patch(self, request, variant_id: int):
         variant = get_object_or_404(ProductVariant, pk=variant_id)
         data = request.data or {}
 
+        if "stock" not in data:
+            raise ValidationError({"stock": "Stock is required."})
+
+        # quick coercion for cleaner error messages
+        stock = _coerce_int(data.get("stock"), "stock")
+
         try:
-            variant = update_product_variant_stock(
+            updated = update_product_variant_stock(
                 variant=variant,
-                stock=data.get("stock"),
+                stock=stock,
             )
         except ValidationError:
             raise
         except Exception:
-            raise ValidationError({
-                "message": "Failed to update variant stock."
-            })
+            raise ValidationError({"detail": "Failed to update variant stock."})
 
         return Response(
-            {
-                "id": variant.id,
-                "stock": variant.stock,
-            },
+            {"id": updated.id, "stock": int(updated.stock)},
             status=status.HTTP_200_OK,
         )
 
-    # -----------------------------
-    # DELETE VARIANT
-    # -----------------------------
     @transaction.atomic
     def delete(self, request, variant_id: int):
         variant = get_object_or_404(ProductVariant, pk=variant_id)
@@ -156,12 +216,9 @@ class AdminProductVariantDetailView(AdminJWTAPIView):
         try:
             delete_product_variant(variant=variant)
         except ValidationError:
+            # Includes the protected-order message from the service
             raise
         except Exception:
-            raise ValidationError({
-                "message": "Failed to delete product variant."
-            })
+            raise ValidationError({"detail": "Failed to delete product variant."})
 
-        return Response(
-            status=status.HTTP_204_NO_CONTENT
-        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
