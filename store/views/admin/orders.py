@@ -22,6 +22,7 @@ from store.services.order_service import (
 # BASE ADMIN VIEW (JWT ENFORCED)
 # ==================================================
 
+
 class AdminJWTAPIView(APIView):
     """
     Base class for ALL admin order views.
@@ -60,8 +61,32 @@ VALID_ORDERING_FIELDS = {
 
 
 # ==================================================
+# HELPERS
+# ==================================================
+
+
+def _serialize_order_item(item):
+    """
+    List + detail use the SAME item shape (frontend expects AdminOrderItem).
+    Keep all numeric-like fields as strings (to match existing API contract).
+    """
+    price_str = str(item.price)
+    subtotal_str = str(item.price * item.quantity)
+    return {
+        "id": item.id,
+        "product_name": item.product_name,
+        "size": item.size,
+        "color": item.color,
+        "price": price_str,
+        "quantity": item.quantity,
+        "subtotal": subtotal_str,
+    }
+
+
+# ==================================================
 # ADMIN ORDER LIST (FILTER + SEARCH + SORT + PAGINATION)
 # ==================================================
+
 
 class AdminOrderListView(AdminJWTAPIView):
     """
@@ -102,10 +127,9 @@ class AdminOrderListView(AdminJWTAPIView):
         # -----------------------------
         ordering = request.query_params.get("ordering", "-created_at")
         if ordering not in VALID_ORDERING_FIELDS:
-            raise ValidationError({
-                "message": f"Invalid ordering field '{ordering}'."
-            })
-
+            raise ValidationError(
+                {"message": f"Invalid ordering field '{ordering}'."}
+            )
         qs = qs.order_by(ordering)
 
         # -----------------------------
@@ -117,9 +141,9 @@ class AdminOrderListView(AdminJWTAPIView):
                 request.query_params.get("page_size", DEFAULT_PAGE_SIZE)
             )
         except (TypeError, ValueError):
-            raise ValidationError({
-                "message": "Invalid pagination parameters."
-            })
+            raise ValidationError(
+                {"message": "Invalid pagination parameters."}
+            )
 
         page = max(page, 1)
         page_size = min(max(page_size, 1), MAX_PAGE_SIZE)
@@ -128,7 +152,9 @@ class AdminOrderListView(AdminJWTAPIView):
         start = (page - 1) * page_size
         end = start + page_size
 
-        orders = qs[start:end]
+        # Slice first, then prefetch for only the current page to avoid
+        # prefetching items for the entire table.
+        orders = qs[start:end].prefetch_related("items")
 
         return Response(
             {
@@ -148,6 +174,11 @@ class AdminOrderListView(AdminJWTAPIView):
                         "status": order.status,
                         "total": str(order.total_price),
                         "created_at": order.created_at.isoformat(),
+                        # ✅ Added: line items for the list page
+                        "items": [
+                            _serialize_order_item(item)
+                            for item in order.items.all()
+                        ],
                     }
                     for order in orders
                 ],
@@ -159,6 +190,7 @@ class AdminOrderListView(AdminJWTAPIView):
 # ==================================================
 # ADMIN ORDER DETAIL (READ-ONLY)
 # ==================================================
+
 
 class AdminOrderDetailView(AdminJWTAPIView):
     """
@@ -186,15 +218,7 @@ class AdminOrderDetailView(AdminJWTAPIView):
                     "address": order.address,
                 },
                 "items": [
-                    {
-                        "id": item.id,
-                        "product_name": item.product_name,
-                        "size": item.size,
-                        "color": item.color,
-                        "price": str(item.price),
-                        "quantity": item.quantity,
-                        "subtotal": str(item.price * item.quantity),
-                    }
+                    _serialize_order_item(item)
                     for item in order.items.all()
                 ],
             },
@@ -205,6 +229,7 @@ class AdminOrderDetailView(AdminJWTAPIView):
 # ==================================================
 # ADMIN ORDER STATUS UPDATE (STATE MACHINE SAFE)
 # ==================================================
+
 
 class AdminOrderStatusUpdateView(AdminJWTAPIView):
     """
@@ -218,14 +243,12 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
 
         action = request.data.get("action")
         if not action:
-            raise ValidationError({
-                "message": "Action is required."
-            })
+            raise ValidationError({"message": "Action is required."})
 
         if action not in VALID_ACTIONS:
-            raise ValidationError({
-                "message": f"Invalid action '{action}'."
-            })
+            raise ValidationError(
+                {"message": f"Invalid action '{action}'."}
+            )
 
         actor_type = "admin"
         actor_identifier = f"admin:{request.user.pk}"
@@ -240,9 +263,9 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
                 actor_identifier=actor_identifier,
             )
             if not success:
-                raise ValidationError({
-                    "message": "Only pending orders can be confirmed."
-                })
+                raise ValidationError(
+                    {"message": "Only pending orders can be confirmed."}
+                )
 
         elif action == "ship":
             success = ship_order(
@@ -251,9 +274,9 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
                 actor_identifier=actor_identifier,
             )
             if not success:
-                raise ValidationError({
-                    "message": "Only confirmed orders can be shipped."
-                })
+                raise ValidationError(
+                    {"message": "Only confirmed orders can be shipped."}
+                )
 
         elif action == "deliver":
             success = deliver_order(
@@ -262,9 +285,9 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
                 actor_identifier=actor_identifier,
             )
             if not success:
-                raise ValidationError({
-                    "message": "Only shipped orders can be delivered."
-                })
+                raise ValidationError(
+                    {"message": "Only shipped orders can be delivered."}
+                )
 
         elif action == "cancel":
             success = cancel_order(
@@ -273,9 +296,9 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
                 actor_identifier=actor_identifier,
             )
             if not success:
-                raise ValidationError({
-                    "message": "This order cannot be cancelled."
-                })
+                raise ValidationError(
+                    {"message": "This order cannot be cancelled."}
+                )
 
         order.refresh_from_db()
 
@@ -293,6 +316,7 @@ class AdminOrderStatusUpdateView(AdminJWTAPIView):
 # ADMIN ORDER AUDIT TIMELINE (READ-ONLY)
 # ==================================================
 
+
 class AdminOrderAuditView(AdminJWTAPIView):
     """
     Admin-only order status audit timeline.
@@ -303,9 +327,9 @@ class AdminOrderAuditView(AdminJWTAPIView):
         order = get_object_or_404(Order, pk=pk)
 
         logs = (
-            OrderStatusAuditLog.objects
-            .filter(order=order)
-            .order_by("created_at")
+            OrderStatusAuditLog.objects.filter(order=order).order_by(
+                "created_at"
+            )
         )
 
         return Response(
