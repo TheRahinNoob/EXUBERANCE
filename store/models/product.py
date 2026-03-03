@@ -45,6 +45,31 @@ def _normalize_color(value: object) -> str:
     return token.title()
 
 
+def _normalize_hex_color(value: object) -> str:
+    """
+    Normalizes hex colors:
+    - trims whitespace
+    - uppercases
+    - keeps empty string if missing
+
+    Examples:
+    - "  #ff00aa " -> "#FF00AA"
+    - "" -> ""
+    - None -> ""
+    """
+    return str(value or "").strip().upper()
+
+
+def _is_valid_hex_color(value: str) -> bool:
+    """
+    Validates strict #RRGGBB format.
+    """
+    if not value or len(value) != 7 or not value.startswith("#"):
+        return False
+    allowed = "0123456789ABCDEF"
+    return all(ch in allowed for ch in value[1:])
+
+
 # ==================================================
 # PRODUCT (CORE)
 # ==================================================
@@ -147,6 +172,16 @@ class ProductVariant(models.Model):
     # ✅ No choices here so you can use numeric/mixed sizes per product
     size = models.CharField(max_length=32)
     color = models.CharField(max_length=50)
+
+    # ✅ New: optional hex code for UI color swatch
+    # Stored as strict "#RRGGBB" (uppercase), or "" if unknown.
+    color_hex = models.CharField(
+        max_length=7,
+        blank=True,
+        default="",
+        help_text="Optional hex color code like #RRGGBB (used for color swatch on site).",
+    )
+
     stock = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -161,12 +196,14 @@ class ProductVariant(models.Model):
             models.Index(fields=["stock"]),
             models.Index(fields=["size"]),
             models.Index(fields=["color"]),
+            models.Index(fields=["color_hex"]),
         ]
 
     def clean(self) -> None:
         # Normalize
         self.size = _normalize_size(self.size)
         self.color = _normalize_color(self.color)
+        self.color_hex = _normalize_hex_color(self.color_hex)
 
         # Validate required
         if not self.size:
@@ -180,6 +217,10 @@ class ProductVariant(models.Model):
             raise ValidationError({"size": "Size is too long."})
         if len(self.color) > 50:
             raise ValidationError({"color": "Color is too long."})
+
+        # Validate hex format if provided
+        if self.color_hex and not _is_valid_hex_color(self.color_hex):
+            raise ValidationError({"color_hex": "Hex color must be in the format #RRGGBB."})
 
     def save(self, *args, **kwargs):
         self.full_clean()

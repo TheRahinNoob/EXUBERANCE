@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Set, TypedDict
+import re
+from typing import Any, Iterable, List, Set, TypedDict
 
-from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 
 from store.models import Product, ProductVariant
@@ -20,8 +21,9 @@ from store.models import Product, ProductVariant
 # - NO dependency on ProductVariant.SIZE_CHOICES
 #
 # IMPORTANT:
-# - ProductVariant.size is now a free-form token (numeric, alpha, mixed)
+# - ProductVariant.size is a free-form token (numeric, alpha, mixed)
 # - We normalize size/color to reduce duplicates (" blue " vs "Blue")
+# - color_hex is optional, strict "#RRGGBB" (uppercase) or ""
 # ==================================================
 
 
@@ -33,11 +35,13 @@ class VariantDTO(TypedDict):
     id: int
     size: str
     color: str
+    color_hex: str
     stock: int
 
 
 class BulkCreateResult(TypedDict):
     color: str
+    color_hex: str
     default_stock: int
     created: List[VariantDTO]
     skipped_existing: List[str]
@@ -46,6 +50,9 @@ class BulkCreateResult(TypedDict):
 # ==================================================
 # NORMALIZATION HELPERS
 # ==================================================
+
+_HEX_RE = re.compile(r"^#[0-9A-F]{6}$")
+
 
 def _collapse_ws(value: str) -> str:
     return " ".join(value.split())
@@ -81,6 +88,21 @@ def _normalize_color(color: Any) -> str:
     return token.title()
 
 
+def _normalize_color_hex(color_hex: Any) -> str:
+    """
+    Normalize hex colors:
+    - trims whitespace
+    - uppercases
+    - empty string if missing
+
+    Examples:
+    - "  #ff00aa " -> "#FF00AA"
+    - "" -> ""
+    - None -> ""
+    """
+    return str(color_hex or "").strip().upper()
+
+
 def _coerce_int(value: Any, field_name: str) -> int:
     try:
         return int(value)
@@ -106,22 +128,45 @@ def _validate_size_token(size: str) -> None:
     if not size:
         raise ValidationError({"size": "Size is required."})
 
-    if len(size) > 20:
-        # keep this aligned with model max_length for size
+    # keep aligned with model max_length for size (currently 32)
+    if len(size) > 32:
         raise ValidationError({"size": "Size is too long."})
 
 
 def _validate_color_token(color: str) -> None:
     if not color:
         raise ValidationError({"color": "Color is required."})
+
+    # keep aligned with model max_length for color (currently 50)
     if len(color) > 50:
-        # keep aligned with model max_length for color
         raise ValidationError({"color": "Color is too long."})
+
+
+def _validate_color_hex(color_hex: str) -> None:
+    """
+    color_hex is optional.
+    If provided, must be strict "#RRGGBB" (uppercase already normalized).
+    """
+    if not color_hex:
+        return
+
+    if not _HEX_RE.match(color_hex):
+        raise ValidationError({"color_hex": "Hex color must be in the format #RRGGBB."})
 
 
 def _validate_stock(stock: int) -> None:
     if stock < 0:
         raise ValidationError({"stock": "Stock cannot be negative."})
+
+
+def _dto(v: ProductVariant) -> VariantDTO:
+    return {
+        "id": v.id,
+        "size": v.size,
+        "color": v.color,
+        "color_hex": v.color_hex or "",
+        "stock": int(v.stock),
+    }
 
 
 # ==================================================
@@ -134,13 +179,14 @@ def create_product_variant(
     product: Product,
     size: Any,
     color: Any,
-    stock: Any,
+    color_hex: Any = "",
+    stock: Any = 0,
 ) -> ProductVariant:
     """
     Create a new product variant.
 
     Guarantees:
-    - normalized size/color
+    - normalized size/color/color_hex
     - sane validation (no SIZE_CHOICES dependency)
     - stock >= 0
     - uniqueness enforced via DB constraints (product, size, color)
@@ -151,9 +197,11 @@ def create_product_variant(
 
     normalized_size = _normalize_size(size)
     normalized_color = _normalize_color(color)
+    normalized_hex = _normalize_color_hex(color_hex)
 
     _validate_size_token(normalized_size)
     _validate_color_token(normalized_color)
+    _validate_color_hex(normalized_hex)
 
     stock_int = _coerce_int(stock, "stock")
     _validate_stock(stock_int)
@@ -163,11 +211,14 @@ def create_product_variant(
             product=product,
             size=normalized_size,
             color=normalized_color,
+            color_hex=normalized_hex,
             stock=stock_int,
         )
     except IntegrityError:
         # DB-level safety for race conditions
-        raise ValidationError({"detail": "Variant with this size and color already exists."})
+        raise ValidationError(
+            {"detail": "Variant with this size and color already exists."}
+        )
 
 
 # ==================================================
@@ -179,6 +230,7 @@ def bulk_create_product_variants(
     *,
     product: Product,
     color: Any,
+    color_hex: Any = "",
     sizes: Iterable[Any] | None,
     default_stock: Any = 0,
 ) -> BulkCreateResult:
@@ -192,8 +244,9 @@ def bulk_create_product_variants(
     - returns stable payload for frontend:
       {
         "color": "Blue",
+        "color_hex": "#0000FF",
         "default_stock": 0,
-        "created": [{id,size,color,stock}, ...],
+        "created": [{id,size,color,color_hex,stock}, ...],
         "skipped_existing": ["38", "40"]
       }
     """
@@ -202,7 +255,10 @@ def bulk_create_product_variants(
         raise ValidationError({"product": "Invalid product."})
 
     normalized_color = _normalize_color(color)
+    normalized_hex = _normalize_color_hex(color_hex)
+
     _validate_color_token(normalized_color)
+    _validate_color_hex(normalized_hex)
 
     stock_int = _coerce_int(default_stock, "default_stock")
     if stock_int < 0:
@@ -219,6 +275,7 @@ def bulk_create_product_variants(
         token = _normalize_size(s)
         if not token:
             continue
+
         _validate_size_token(token)
 
         if token in seen:
@@ -251,22 +308,17 @@ def bulk_create_product_variants(
                 product=product,
                 size=size_token,
                 color=normalized_color,
+                color_hex=normalized_hex,
                 stock=stock_int,
             )
-            created.append(
-                {
-                    "id": v.id,
-                    "size": v.size,
-                    "color": v.color,
-                    "stock": int(v.stock),
-                }
-            )
+            created.append(_dto(v))
         except IntegrityError:
             # if a concurrent request created it, treat as skipped (idempotent)
             skipped_existing.append(size_token)
 
     return {
         "color": normalized_color,
+        "color_hex": normalized_hex,
         "default_stock": stock_int,
         "created": created,
         "skipped_existing": skipped_existing,

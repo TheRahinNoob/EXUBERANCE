@@ -25,7 +25,7 @@ class ProductVariantInline(admin.TabularInline):
     model = ProductVariant
     extra = 1
     ordering = ("id",)
-    fields = ("size", "color", "stock")
+    fields = ("size", "color", "color_hex", "stock")  # ✅ added color_hex
 
 
 # ==================================================

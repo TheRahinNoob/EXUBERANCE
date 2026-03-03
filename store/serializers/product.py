@@ -34,6 +34,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "id",
             "size",
             "color",
+            "color_hex",  # ✅ added for UI color swatch
             "stock",
         )
 
@@ -126,10 +127,8 @@ class ProductSearchSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "slug",
-
             "price",
             "old_price",        # ✅ 🔥 THIS WAS MISSING
-
             "main_image",
             "categories",
         )
